@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func openTestConnConninfo(conninfo string) (*sql.DB, error) {
+func openTestClientConninfo(conninfo string) (*Client, error) {
 	datname := os.Getenv("PGDATABASE")
 	sslmode := os.Getenv("PGSSLMODE")
 	timeout := os.Getenv("PGCONNECT_TIMEOUT")
@@ -24,16 +24,20 @@ func openTestConnConninfo(conninfo string) (*sql.DB, error) {
 		os.Setenv("PGCONNECT_TIMEOUT", "20")
 	}
 
-	return sql.Open("postgres", conninfo)
+	db, err := sql.Open("postgres", conninfo)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{db: db}, nil
 }
 
-func openTestConn(t testing.TB) *sql.DB {
-	conn, err := openTestConnConninfo("")
+func openTestClient(t testing.TB) *Client {
+	c, err := openTestClientConninfo("")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return conn
+	return c
 }
 
 func truncateAndClose(db *sql.DB) {
@@ -44,14 +48,14 @@ func truncateAndClose(db *sql.DB) {
 }
 
 func TestEnqueueEmpty(t *testing.T) {
-	db := openTestConn(t)
-	defer truncateAndClose(db)
+	c := openTestClient(t)
+	defer truncateAndClose(c.db)
 
-	if err := Enqueue(db, Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(db)
+	j, err := findOneJob(c.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,15 +89,15 @@ func TestEnqueueEmpty(t *testing.T) {
 }
 
 func TestEnqueueWithPriority(t *testing.T) {
-	db := openTestConn(t)
-	defer truncateAndClose(db)
+	c := openTestClient(t)
+	defer truncateAndClose(c.db)
 
 	want := 99
-	if err := Enqueue(db, Job{Type: "MyJob", Priority: want}); err != nil {
+	if err := c.Enqueue(Job{Type: "MyJob", Priority: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(db)
+	j, err := findOneJob(c.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,15 +108,15 @@ func TestEnqueueWithPriority(t *testing.T) {
 }
 
 func TestEnqueueWithRunAt(t *testing.T) {
-	db := openTestConn(t)
-	defer truncateAndClose(db)
+	c := openTestClient(t)
+	defer truncateAndClose(c.db)
 
 	want := time.Now().Add(2 * time.Minute)
-	if err := Enqueue(db, Job{Type: "MyJob", RunAt: want}); err != nil {
+	if err := c.Enqueue(Job{Type: "MyJob", RunAt: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(db)
+	j, err := findOneJob(c.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,15 +129,15 @@ func TestEnqueueWithRunAt(t *testing.T) {
 }
 
 func TestEnqueueWithArgs(t *testing.T) {
-	db := openTestConn(t)
-	defer truncateAndClose(db)
+	c := openTestClient(t)
+	defer truncateAndClose(c.db)
 
 	want := `{"arg1":0, "arg2":"a string"}`
-	if err := Enqueue(db, Job{Type: "MyJob", Args: want}); err != nil {
+	if err := c.Enqueue(Job{Type: "MyJob", Args: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(db)
+	j, err := findOneJob(c.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,15 +148,15 @@ func TestEnqueueWithArgs(t *testing.T) {
 }
 
 func TestEnqueueWithQueue(t *testing.T) {
-	db := openTestConn(t)
-	defer truncateAndClose(db)
+	c := openTestClient(t)
+	defer truncateAndClose(c.db)
 
 	want := "special-work-queue"
-	if err := Enqueue(db, Job{Type: "MyJob", Queue: want}); err != nil {
+	if err := c.Enqueue(Job{Type: "MyJob", Queue: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(db)
+	j, err := findOneJob(c.db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,10 +168,10 @@ func TestEnqueueWithQueue(t *testing.T) {
 
 // TODO: test Enqueue with empty Type
 func TestEnqueueWithEmptyType(t *testing.T) {
-	db := openTestConn(t)
-	defer truncateAndClose(db)
+	c := openTestClient(t)
+	defer truncateAndClose(c.db)
 
-	if err := Enqueue(db, Job{Type: ""}); err != ErrMissingType {
+	if err := c.Enqueue(Job{Type: ""}); err != ErrMissingType {
 		t.Fatalf("want ErrMissingType, got %v", err)
 	}
 }

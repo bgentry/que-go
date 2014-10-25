@@ -43,12 +43,18 @@ type Job struct {
 	LastError sql.NullString
 }
 
+// TODO: add a way to specify default queueing options
+type Client struct {
+	db *sql.DB
+}
+
+func NewClient(db *sql.DB) *Client {
+	return &Client{db: db}
+}
+
 var ErrMissingType = errors.New("job type must be specified")
 
-// TODO: put all methods on a Client struct to allow for defaults and not having
-// to pass db refs all around
-
-func Enqueue(db *sql.DB, j Job) error {
+func (c *Client) Enqueue(j Job) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}
@@ -70,7 +76,7 @@ func Enqueue(db *sql.DB, j Job) error {
 		Valid:  j.Args != "",
 	}
 
-	_, err := db.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
+	_, err := c.db.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
 	return err
 }
 
