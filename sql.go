@@ -87,14 +87,6 @@ VALUES
 (coalesce($1, '')::text, coalesce($2, 100)::smallint, coalesce($3, 'now')::timestamptz, $4::text, coalesce($5, '[]')::json)
 `
 
-	sqlInsertJobAndReturn = `
-INSERT INTO que_jobs
-(queue, priority, run_at, job_class, args)
-VALUES
-(coalesce($1, '')::text, coalesce($2, 100)::smallint, coalesce($3, 'now')::timestamptz, $4::text, coalesce($5, '[]')::json)
-RETURNING *
-`
-
 	sqlDestroyJob = `
 DELETE FROM que_jobs
 WHERE queue    = $1::text
