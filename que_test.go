@@ -44,5 +44,11 @@ func findOneJob(pool *pgx.ConnPool) (*Job, error) {
 		&j.LastError,
 		&j.Queue,
 	)
-	return j, err
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return j, nil
 }

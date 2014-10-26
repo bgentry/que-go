@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestEnqueueEmpty(t *testing.T) {
+func TestEnqueueOnlyType(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 

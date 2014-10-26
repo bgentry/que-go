@@ -60,8 +60,12 @@ WHERE locked
 LIMIT 1
 `
 
+	sqlUnlockJob = `
+SELECT pg_advisory_unlock($1)
+`
+
 	sqlCheckJob = `
-SELECT 1 AS one
+SELECT true AS exists
 FROM   que_jobs
 WHERE  queue    = $1::text
 AND    priority = $2::smallint
@@ -87,7 +91,7 @@ VALUES
 (coalesce($1::text, ''::text), coalesce($2::smallint, 100::smallint), coalesce($3::timestamptz, 'now'::timestamptz), $4::text, coalesce($5::json, '[]'::json))
 `
 
-	sqlDestroyJob = `
+	sqlDeleteJob = `
 DELETE FROM que_jobs
 WHERE queue    = $1::text
 AND   priority = $2::smallint
