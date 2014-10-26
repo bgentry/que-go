@@ -60,6 +60,23 @@ func (j *Job) Done() error {
 	return nil
 }
 
+// Error marks the job as failed and schedules it to be reworked. An error
+// message or backtrace can be provided as msg, which will be saved on the job.
+// It will also increase the error count and return the database connection to
+// the pool.
+func (j *Job) Error(msg string) error {
+	errorCount := j.ErrorCount + 1
+	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
+
+	_, err := j.conn.Exec(sqlSetError, errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
+	if err != nil {
+		return err
+	}
+
+	j.unlock()
+	return nil
+}
+
 func (j *Job) unlock() {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -122,9 +139,12 @@ func (c *Client) Enqueue(j Job) error {
 // If a job is found, a session-level Postgres advisory lock is created for the
 // Job's ID. If no job is found, nil will be returned instead of an error.
 //
+// Because Que uses session-level advisory locks, we have to hold the
+// same connection throughout the process of getting a job, working it,
+// deleting it, and removing the lock.
+//
 // After the Job has been worked, you must call either Done() or Error() on it
-// in order to return the database connection to the pool and remove the
-// database lock.
+// in order to return the database connection to the pool and remove the lock.
 func (c *Client) LockJob(queue string) (*Job, error) {
 	conn, err := c.pool.Acquire()
 	if err != nil {

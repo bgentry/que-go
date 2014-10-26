@@ -120,7 +120,7 @@ func TestLockJobCustomQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if j != nil {
-		defer j.Done()
+		j.Done()
 		t.Errorf("expected no job to be found with empty queue name, got %+v", j)
 	}
 
@@ -169,6 +169,67 @@ func TestJobDone(t *testing.T) {
 	}
 	if j2 != nil {
 		t.Errorf("job was not deleted: %+v", j2)
+	}
+
+	// make sure lock was released
+	var count int64
+	query := "SELECT count(*) FROM pg_locks WHERE locktype=$1 AND objid=$2::bigint"
+	if err = c.pool.QueryRow(query, "advisory", j.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Error("advisory lock was not released")
+	}
+
+	// make sure conn was returned to pool
+	stat := c.pool.Stat()
+	total, available := stat.CurrentConnections, stat.AvailableConnections
+	if total != available {
+		t.Errorf("want available=total, got available=%d total=%d", available, total)
+	}
+}
+
+func TestJobError(t *testing.T) {
+	c := openTestClient(t)
+	defer truncateAndClose(c.pool)
+
+	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+		t.Fatal(err)
+	}
+
+	j, err := c.LockJob("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j == nil {
+		t.Fatal("wanted job, got none")
+	}
+
+	msg := "world\nended"
+	if err = j.Error(msg); err != nil {
+		t.Fatal(err)
+	}
+	// make sure conn and pool were cleared
+	if j.conn != nil {
+		t.Errorf("want nil conn, got %+v", j.conn)
+	}
+	if j.pool != nil {
+		t.Errorf("want nil pool, got %+v", j.pool)
+	}
+
+	// make sure job was not deleted
+	j2, err := findOneJob(c.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j2 == nil {
+		t.Fatal("job was not found")
+	}
+	if !j2.LastError.Valid || j2.LastError.String != msg {
+		t.Errorf("want LastError=%q, got %q", msg, j2.LastError.String)
+	}
+	if j2.ErrorCount != 1 {
+		t.Errorf("want ErrorCount=%d, got %d", 1, j2.ErrorCount)
 	}
 
 	// make sure lock was released
