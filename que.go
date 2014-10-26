@@ -1,11 +1,10 @@
 package que
 
 import (
-	"database/sql"
 	"errors"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 // Job is a single unit of work for Que to perform.
@@ -19,7 +18,7 @@ type Job struct {
 	// Priority is the priority of the Job. The default priority is 100, and a
 	// lower number means a higher priority. A priority of 5 would be very
 	// important.
-	Priority int
+	Priority int16
 
 	// RunAt is the time that this job should be executed. It defaults to now(),
 	// meaning the job will execute immediately. Set it to a value in the future
@@ -36,20 +35,20 @@ type Job struct {
 
 	// ErrorCount is the number of times this job has attempted to run, but
 	// failed with an error. It is ignored on job creation.
-	ErrorCount int
+	ErrorCount int32
 
 	// LastError is the error message or stack trace from the last time the job
 	// failed. It is ignored on job creation.
-	LastError sql.NullString
+	LastError pgx.NullString
 }
 
 // TODO: add a way to specify default queueing options
 type Client struct {
-	db *sql.DB
+	pool *pgx.ConnPool
 }
 
-func NewClient(db *sql.DB) *Client {
-	return &Client{db: db}
+func NewClient(pool *pgx.ConnPool) *Client {
+	return &Client{pool: pool}
 }
 
 var ErrMissingType = errors.New("job type must be specified")
@@ -59,24 +58,24 @@ func (c *Client) Enqueue(j Job) error {
 		return ErrMissingType
 	}
 
-	queue := sql.NullString{
+	queue := pgx.NullString{
 		String: j.Queue,
 		Valid:  j.Queue != "",
 	}
-	priority := sql.NullInt64{
-		Int64: int64(j.Priority),
+	priority := pgx.NullInt16{
+		Int16: int16(j.Priority),
 		Valid: j.Priority != 0,
 	}
-	runAt := pq.NullTime{
+	runAt := pgx.NullTime{
 		Time:  j.RunAt,
 		Valid: !j.RunAt.IsZero(),
 	}
-	args := sql.NullString{
+	args := pgx.NullString{
 		String: j.Args,
 		Valid:  j.Args != "",
 	}
 
-	_, err := c.db.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
+	_, err := c.pool.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
 	return err
 }
 

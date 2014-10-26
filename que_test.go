@@ -1,74 +1,59 @@
 package que
 
 import (
-	"database/sql"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx"
 )
 
-func openTestClientConninfo(conninfo string) (*Client, error) {
-	datname := os.Getenv("PGDATABASE")
-	sslmode := os.Getenv("PGSSLMODE")
-	timeout := os.Getenv("PGCONNECT_TIMEOUT")
-
-	if datname == "" {
-		os.Setenv("PGDATABASE", "que-go-test")
-	}
-
-	if sslmode == "" {
-		os.Setenv("PGSSLMODE", "disable")
-	}
-
-	if timeout == "" {
-		os.Setenv("PGCONNECT_TIMEOUT", "20")
-	}
-
-	db, err := sql.Open("postgres", conninfo)
-	if err != nil {
-		return nil, err
-	}
-	return &Client{db: db}, nil
-}
-
 func openTestClient(t testing.TB) *Client {
-	c, err := openTestClientConninfo("")
+	connPoolConfig := pgx.ConnPoolConfig{
+		ConnConfig: pgx.ConnConfig{
+			Host:     "localhost",
+			Database: "que-go-test",
+		},
+		MaxConnections: 5,
+	}
+	pool, err := pgx.NewConnPool(connPoolConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	return c
+	return NewClient(pool)
 }
 
-func truncateAndClose(db *sql.DB) {
-	if _, err := db.Exec("TRUNCATE TABLE que_jobs"); err != nil {
+func truncateAndClose(pool *pgx.ConnPool) {
+	if _, err := pool.Exec("TRUNCATE TABLE que_jobs"); err != nil {
 		panic(err)
 	}
-	db.Close()
+	pool.Close()
 }
 
 func TestEnqueueEmpty(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.db)
+	defer truncateAndClose(c.pool)
 
 	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.db)
+	j, err := findOneJob(c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check resulting job
-	if want := 100; j.Priority != want {
+	if j.ID == 0 {
+		t.Errorf("want non-zero ID")
+	}
+	if want := ""; j.Queue != want {
+		t.Errorf("want Queue=%q, got %q", want, j.Queue)
+	}
+	if want := int16(100); j.Priority != want {
 		t.Errorf("want Priority=%d, got %d", want, j.Priority)
 	}
 	if j.RunAt.IsZero() {
 		t.Error("want non-zero RunAt")
-	}
-	if j.ID == 0 {
-		t.Errorf("want non-zero ID")
 	}
 	if want := "MyJob"; j.Type != want {
 		t.Errorf("want Type=%q, got %q", want, j.Type)
@@ -76,28 +61,25 @@ func TestEnqueueEmpty(t *testing.T) {
 	if want := "[]"; j.Args != want {
 		t.Errorf("want Args=%s, got %s", want, j.Args)
 	}
-	if want := 0; j.ErrorCount != want {
+	if want := int32(0); j.ErrorCount != want {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
 	}
-	if want := 100; j.Priority != want {
-		t.Errorf("want priority=%d, got %d", want, j.Priority)
-	}
-	if want := ""; j.Queue != want {
-		t.Errorf("want Queue=%q, got %q", want, j.Queue)
+	if j.LastError.Valid {
+		t.Errorf("want no LastError, got %s", j.LastError)
 	}
 
 }
 
 func TestEnqueueWithPriority(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.db)
+	defer truncateAndClose(c.pool)
 
-	want := 99
+	want := int16(99)
 	if err := c.Enqueue(Job{Type: "MyJob", Priority: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.db)
+	j, err := findOneJob(c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,14 +91,14 @@ func TestEnqueueWithPriority(t *testing.T) {
 
 func TestEnqueueWithRunAt(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.db)
+	defer truncateAndClose(c.pool)
 
 	want := time.Now().Add(2 * time.Minute)
 	if err := c.Enqueue(Job{Type: "MyJob", RunAt: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.db)
+	j, err := findOneJob(c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,14 +112,14 @@ func TestEnqueueWithRunAt(t *testing.T) {
 
 func TestEnqueueWithArgs(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.db)
+	defer truncateAndClose(c.pool)
 
 	want := `{"arg1":0, "arg2":"a string"}`
 	if err := c.Enqueue(Job{Type: "MyJob", Args: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.db)
+	j, err := findOneJob(c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,14 +131,14 @@ func TestEnqueueWithArgs(t *testing.T) {
 
 func TestEnqueueWithQueue(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.db)
+	defer truncateAndClose(c.pool)
 
 	want := "special-work-queue"
 	if err := c.Enqueue(Job{Type: "MyJob", Queue: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.db)
+	j, err := findOneJob(c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,23 +148,22 @@ func TestEnqueueWithQueue(t *testing.T) {
 	}
 }
 
-// TODO: test Enqueue with empty Type
 func TestEnqueueWithEmptyType(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.db)
+	defer truncateAndClose(c.pool)
 
 	if err := c.Enqueue(Job{Type: ""}); err != ErrMissingType {
 		t.Fatalf("want ErrMissingType, got %v", err)
 	}
 }
 
-func findOneJob(db *sql.DB) (*Job, error) {
+func findOneJob(pool *pgx.ConnPool) (*Job, error) {
 	findSQL := `
 	SELECT priority, run_at, job_id, job_class, args, error_count, last_error, queue
 	FROM que_jobs LIMIT 1`
 
 	j := &Job{}
-	err := db.QueryRow(findSQL).Scan(
+	err := pool.QueryRow(findSQL).Scan(
 		&j.Priority,
 		&j.RunAt,
 		&j.ID,
