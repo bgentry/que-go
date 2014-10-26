@@ -79,8 +79,8 @@ func TestEnqueueWithRunAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// round to the microsecond as postgres does
-	want = want.Round(time.Microsecond)
+	// truncate to the microsecond as postgres driver does
+	want = want.Truncate(time.Microsecond)
 	if !want.Equal(j.RunAt) {
 		t.Errorf("want RunAt=%s, got %s", want, j.RunAt)
 	}
