@@ -105,10 +105,17 @@ func NewClient(pool *pgx.ConnPool) *Client {
 
 var ErrMissingType = errors.New("job type must be specified")
 
+// Enqueue adds a job to the queue.
 func (c *Client) Enqueue(j Job) error {
 	return execEnqueue(j, c.pool)
 }
 
+// EnqueueInTx adds a job to the queue within the scope of the transaction tx.
+// This allows you to guarantee that an enqueued job will either be committed or
+// rolled back atomically with other changes in the course of this transaction.
+//
+// It is the caller's responsibility to Commit or Rollback the transaction after
+// this function is called.
 func (c *Client) EnqueueInTx(j Job, tx *pgx.Tx) error {
 	return execEnqueue(j, tx)
 }
