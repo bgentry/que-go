@@ -106,6 +106,14 @@ func NewClient(pool *pgx.ConnPool) *Client {
 var ErrMissingType = errors.New("job type must be specified")
 
 func (c *Client) Enqueue(j Job) error {
+	return execEnqueue(j, c.pool)
+}
+
+func (c *Client) EnqueueInTx(j Job, tx *pgx.Tx) error {
+	return execEnqueue(j, tx)
+}
+
+func execEnqueue(j Job, q queryable) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}
@@ -127,8 +135,14 @@ func (c *Client) Enqueue(j Job) error {
 		Valid:  j.Args != "",
 	}
 
-	_, err := c.pool.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
+	_, err := q.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
 	return err
+}
+
+type queryable interface {
+	Exec(sql string, arguments ...interface{}) (commandTag pgx.CommandTag, err error)
+	Query(sql string, args ...interface{}) (*pgx.Rows, error)
+	QueryRow(sql string, args ...interface{}) *pgx.Row
 }
 
 // TODO: consider an alternate Enqueue func that also returns the newly

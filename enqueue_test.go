@@ -132,3 +132,38 @@ func TestEnqueueWithEmptyType(t *testing.T) {
 		t.Fatalf("want ErrMissingType, got %v", err)
 	}
 }
+
+func TestEnqueueInTx(t *testing.T) {
+	c := openTestClient(t)
+	defer truncateAndClose(c.pool)
+
+	tx, err := c.pool.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	if err = c.EnqueueInTx(Job{Type: "MyJob"}, tx); err != nil {
+		t.Fatal(err)
+	}
+
+	j, err := findOneJob(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j == nil {
+		t.Fatal("want job, got none")
+	}
+
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
+	j, err = findOneJob(c.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j != nil {
+		t.Fatalf("wanted job to be rolled back, got %+v", j)
+	}
+}

@@ -28,13 +28,13 @@ func truncateAndClose(pool *pgx.ConnPool) {
 	pool.Close()
 }
 
-func findOneJob(pool *pgx.ConnPool) (*Job, error) {
+func findOneJob(q queryable) (*Job, error) {
 	findSQL := `
 	SELECT priority, run_at, job_id, job_class, args, error_count, last_error, queue
 	FROM que_jobs LIMIT 1`
 
 	j := &Job{}
-	err := pool.QueryRow(findSQL).Scan(
+	err := q.QueryRow(findSQL).Scan(
 		&j.Priority,
 		&j.RunAt,
 		&j.ID,
