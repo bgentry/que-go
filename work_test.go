@@ -189,6 +189,31 @@ func TestJobDone(t *testing.T) {
 	}
 }
 
+func TestJobDoneMultiple(t *testing.T) {
+	c := openTestClient(t)
+	defer truncateAndClose(c.pool)
+
+	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+		t.Fatal(err)
+	}
+
+	j, err := c.LockJob("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j == nil {
+		t.Fatal("wanted job, got none")
+	}
+
+	if err = j.Done(); err != nil {
+		t.Fatal(err)
+	}
+	// try calling Done() again
+	if err = j.Done(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestJobError(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)

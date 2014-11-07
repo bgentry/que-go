@@ -42,21 +42,30 @@ type Job struct {
 	// failed. It is ignored on job creation.
 	LastError pgx.NullString
 
-	mu   sync.Mutex
-	pool *pgx.ConnPool
-	conn *pgx.Conn
+	mu        sync.Mutex
+	destroyed bool
+	pool      *pgx.ConnPool
+	conn      *pgx.Conn
 }
 
 // Done marks this job as complete by deleting it from the database. It also
 // removes the Postgres advisory lock on the job and returns the database
 // connection to the pool.
 func (j *Job) Done() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if j.destroyed {
+		return nil
+	}
+
 	_, err := j.conn.Exec(sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
 
-	j.unlock()
+	j.destroyed = true
+	j._unlock()
 	return nil
 }
 
@@ -81,6 +90,10 @@ func (j *Job) unlock() {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
+	j._unlock()
+}
+
+func (j *Job) _unlock() {
 	var ok bool
 	// Swallow this error because we don't want an unlock failure to cause work
 	// to stop.
