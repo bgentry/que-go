@@ -42,8 +42,8 @@ func TestLockJob(t *testing.T) {
 	if want := "MyJob"; j.Type != want {
 		t.Errorf("want Type=%q, got %q", want, j.Type)
 	}
-	if want := "[]"; j.Args != want {
-		t.Errorf("want Args=%s, got %s", want, j.Args)
+	if want, got := "[]", string(j.Args); got != want {
+		t.Errorf("want Args=%s, got %s", want, got)
 	}
 	if want := int32(0); j.ErrorCount != want {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)

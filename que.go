@@ -30,9 +30,8 @@ type Job struct {
 	// Ruby, you should pick suitable Ruby class names (such as MyJob).
 	Type string
 
-	// Args must be a valid JSON string
-	// TODO: should this be []byte instead?
-	Args string
+	// Args must be the bytes of a valid JSON string
+	Args []byte
 
 	// ErrorCount is the number of times this job has attempted to run, but
 	// failed with an error. It is ignored on job creation.
@@ -162,13 +161,26 @@ func execEnqueue(j Job, q queryable) error {
 		Time:  j.RunAt,
 		Valid: !j.RunAt.IsZero(),
 	}
-	args := pgx.NullString{
-		String: j.Args,
-		Valid:  j.Args != "",
-	}
+	args := bytea(j.Args)
 
 	_, err := q.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
 	return err
+}
+
+type bytea []byte
+
+func (b bytea) Encode(w *pgx.WriteBuf, oid pgx.Oid) error {
+	if len(b) == 0 {
+		w.WriteInt32(-1)
+		return nil
+	}
+	w.WriteInt32(int32(len(b)))
+	w.WriteBytes(b)
+	return nil
+}
+
+func (b bytea) FormatCode() int16 {
+	return pgx.TextFormatCode
 }
 
 type queryable interface {

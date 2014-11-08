@@ -34,8 +34,8 @@ func TestEnqueueOnlyType(t *testing.T) {
 	if want := "MyJob"; j.Type != want {
 		t.Errorf("want Type=%q, got %q", want, j.Type)
 	}
-	if want := "[]"; j.Args != want {
-		t.Errorf("want Args=%s, got %s", want, j.Args)
+	if want, got := "[]", string(j.Args); got != want {
+		t.Errorf("want Args=%s, got %s", want, got)
 	}
 	if want := int32(0); j.ErrorCount != want {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
@@ -91,7 +91,7 @@ func TestEnqueueWithArgs(t *testing.T) {
 	defer truncateAndClose(c.pool)
 
 	want := `{"arg1":0, "arg2":"a string"}`
-	if err := c.Enqueue(Job{Type: "MyJob", Args: want}); err != nil {
+	if err := c.Enqueue(Job{Type: "MyJob", Args: []byte(want)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -100,8 +100,8 @@ func TestEnqueueWithArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if j.Args != want {
-		t.Errorf("want Args=%s, got %s", want, j.Args)
+	if got := string(j.Args); got != want {
+		t.Errorf("want Args=%s, got %s", want, got)
 	}
 }
 
