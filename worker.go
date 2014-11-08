@@ -54,6 +54,9 @@ func (w *Worker) workOne() (didWork bool) {
 		log.Printf("attempting to lock job: %v", err)
 		return
 	}
+	if j == nil {
+		return // no job was available
+	}
 	defer j.Done()
 
 	didWork = true
