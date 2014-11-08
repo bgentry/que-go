@@ -9,7 +9,7 @@ func TestEnqueueOnlyType(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -41,9 +41,8 @@ func TestEnqueueOnlyType(t *testing.T) {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
 	}
 	if j.LastError.Valid {
-		t.Errorf("want no LastError, got %s", j.LastError)
+		t.Errorf("want no LastError, got %v", j.LastError)
 	}
-
 }
 
 func TestEnqueueWithPriority(t *testing.T) {
@@ -51,7 +50,7 @@ func TestEnqueueWithPriority(t *testing.T) {
 	defer truncateAndClose(c.pool)
 
 	want := int16(99)
-	if err := c.Enqueue(Job{Type: "MyJob", Priority: want}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob", Priority: want}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +69,7 @@ func TestEnqueueWithRunAt(t *testing.T) {
 	defer truncateAndClose(c.pool)
 
 	want := time.Now().Add(2 * time.Minute)
-	if err := c.Enqueue(Job{Type: "MyJob", RunAt: want}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob", RunAt: want}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,7 +90,7 @@ func TestEnqueueWithArgs(t *testing.T) {
 	defer truncateAndClose(c.pool)
 
 	want := `{"arg1":0, "arg2":"a string"}`
-	if err := c.Enqueue(Job{Type: "MyJob", Args: []byte(want)}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob", Args: []byte(want)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -110,7 +109,7 @@ func TestEnqueueWithQueue(t *testing.T) {
 	defer truncateAndClose(c.pool)
 
 	want := "special-work-queue"
-	if err := c.Enqueue(Job{Type: "MyJob", Queue: want}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob", Queue: want}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,7 +127,7 @@ func TestEnqueueWithEmptyType(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: ""}); err != ErrMissingType {
+	if err := c.Enqueue(&Job{Type: ""}); err != ErrMissingType {
 		t.Fatalf("want ErrMissingType, got %v", err)
 	}
 }
@@ -143,7 +142,7 @@ func TestEnqueueInTx(t *testing.T) {
 	}
 	defer tx.Rollback()
 
-	if err = c.EnqueueInTx(Job{Type: "MyJob"}, tx); err != nil {
+	if err = c.EnqueueInTx(&Job{Type: "MyJob"}, tx); err != nil {
 		t.Fatal(err)
 	}
 

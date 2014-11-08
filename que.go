@@ -118,19 +118,25 @@ func (j *Job) Error(msg string) error {
 	return nil
 }
 
-// TODO: add a way to specify default queueing options
+// Client is a Que client that can add jobs to the queue and remove jobs from
+// the queue.
 type Client struct {
 	pool *pgx.ConnPool
+
+	// TODO: add a way to specify default queueing options
 }
 
+// NewClient creates a new Client that uses the pgx pool.
 func NewClient(pool *pgx.ConnPool) *Client {
 	return &Client{pool: pool}
 }
 
+// ErrMissingType is returned when you attempt to enqueue a job with no Type
+// specified.
 var ErrMissingType = errors.New("job type must be specified")
 
 // Enqueue adds a job to the queue.
-func (c *Client) Enqueue(j Job) error {
+func (c *Client) Enqueue(j *Job) error {
 	return execEnqueue(j, c.pool)
 }
 
@@ -140,11 +146,11 @@ func (c *Client) Enqueue(j Job) error {
 //
 // It is the caller's responsibility to Commit or Rollback the transaction after
 // this function is called.
-func (c *Client) EnqueueInTx(j Job, tx *pgx.Tx) error {
+func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
 	return execEnqueue(j, tx)
 }
 
-func execEnqueue(j Job, q queryable) error {
+func execEnqueue(j *Job, q queryable) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}

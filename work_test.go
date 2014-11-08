@@ -9,7 +9,7 @@ func TestLockJob(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +49,7 @@ func TestLockJob(t *testing.T) {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
 	}
 	if j.LastError.Valid {
-		t.Errorf("want no LastError, got %s", j.LastError)
+		t.Errorf("want no LastError, got %v", j.LastError)
 	}
 
 	// check for advisory lock
@@ -78,7 +78,7 @@ func TestLockJobAlreadyLocked(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -118,7 +118,7 @@ func TestLockJobCustomQueue(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob", Queue: "extra_priority"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob", Queue: "extra_priority"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +150,7 @@ func TestJobConn(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -172,7 +172,7 @@ func TestJobConnRace(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -205,7 +205,7 @@ func TestJobDelete(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,7 +236,7 @@ func TestJobDone(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -280,7 +280,7 @@ func TestJobDoneMultiple(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -301,7 +301,7 @@ func TestJobDeleteFromTx(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -352,7 +352,7 @@ func TestJobDeleteFromTxRollback(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -403,7 +403,7 @@ func TestJobError(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	if err := c.Enqueue(Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
