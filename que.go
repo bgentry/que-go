@@ -42,20 +42,33 @@ type Job struct {
 	// failed. It is ignored on job creation.
 	LastError pgx.NullString
 
-	mu        sync.Mutex
-	destroyed bool
-	pool      *pgx.ConnPool
-	conn      *pgx.Conn
+	mu      sync.Mutex
+	deleted bool
+	pool    *pgx.ConnPool
+	conn    *pgx.Conn
 }
 
-// Done marks this job as complete by deleting it from the database. It also
-// removes the Postgres advisory lock on the job and returns the database
-// connection to the pool.
-func (j *Job) Done() error {
+// Conn returns the pgx connection that this job is locked to. You may initiate
+// transactions on this connection or use it as you please until you call
+// Done(). At that point, this conn will be returned to the pool and it is
+// unsafe to keep using it. This function will return nil if the Job's
+// connection has already been released with Done().
+func (j *Job) Conn() *pgx.Conn {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	if j.destroyed {
+	return j.conn
+}
+
+// Delete marks this job as complete by deleting it form the database.
+//
+// You must also later call Done() to return this job's database connection to
+// the pool.
+func (j *Job) Delete() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if j.deleted {
 		return nil
 	}
 
@@ -64,14 +77,36 @@ func (j *Job) Done() error {
 		return err
 	}
 
-	j.destroyed = true
-	j._unlock()
+	j.deleted = true
 	return nil
+}
+
+// Done releases the Postgres advisory lock on the job and returns the database
+// connection to the pool.
+func (j *Job) Done() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if j.conn == nil || j.pool == nil {
+		// already marked as done
+		return
+	}
+
+	var ok bool
+	// Swallow this error because we don't want an unlock failure to cause work to
+	// stop.
+	_ = j.conn.QueryRow(sqlUnlockJob, j.ID).Scan(&ok)
+
+	j.pool.Release(j.conn)
+	j.pool = nil
+	j.conn = nil
 }
 
 // Error marks the job as failed and schedules it to be reworked. An error
 // message or backtrace can be provided as msg, which will be saved on the job.
-// It will also increase the error count and return the database connection to
+// It will also increase the error count.
+//
+// You must also later call Done() to return this job's database connection to
 // the pool.
 func (j *Job) Error(msg string) error {
 	errorCount := j.ErrorCount + 1
@@ -81,30 +116,7 @@ func (j *Job) Error(msg string) error {
 	if err != nil {
 		return err
 	}
-
-	j.unlock()
 	return nil
-}
-
-func (j *Job) unlock() {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	j._unlock()
-}
-
-func (j *Job) _unlock() {
-	var ok bool
-	// Swallow this error because we don't want an unlock failure to cause work
-	// to stop.
-	_ = j.conn.QueryRow(sqlUnlockJob, j.ID).Scan(&ok)
-
-	if j.conn == nil || j.pool == nil {
-		return
-	}
-	j.pool.Release(j.conn)
-	j.pool = nil
-	j.conn = nil
 }
 
 // TODO: add a way to specify default queueing options
