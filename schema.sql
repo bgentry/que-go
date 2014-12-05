@@ -9,8 +9,7 @@ CREATE TABLE que_jobs
   last_error  text,
   queue       text        NOT NULL DEFAULT '',
 
-  CONSTRAINT que_jobs_pkey PRIMARY KEY (priority, run_at, job_id)
-  CONSTRAINT que_jobs_pkey PRIMARY KEY (queue, priority, run_at, job_id);
+  CONSTRAINT que_jobs_pkey PRIMARY KEY (queue, priority, run_at, job_id)
 );
 
 COMMENT ON TABLE que_jobs IS '3';
