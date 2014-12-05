@@ -134,5 +134,6 @@ func (w *WorkerPool) Shutdown() {
 			wg.Done()
 		}(worker)
 	}
+	wg.Wait()
 	w.done = true
 }
