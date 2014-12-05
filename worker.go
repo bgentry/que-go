@@ -96,24 +96,32 @@ func (w *Worker) Shutdown() {
 }
 
 type WorkerPool struct {
-	workers []*Worker
+	WorkMap  WorkMap
+	Interval time.Duration
 
-	mu   sync.Mutex
-	done bool
+	c       *Client
+	workers []*Worker
+	mu      sync.Mutex
+	done    bool
 }
 
-func NewWorkerPool(c *Client, wm WorkMap, interval time.Duration, count int) (w *WorkerPool) {
-	w.workers = make([]*Worker, count)
-
-	for i := 0; i < count; i++ {
-		w.workers[i] = NewWorker(c, wm)
-		w.workers[i].Interval = interval
+func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
+	return &WorkerPool{
+		c:       c,
+		WorkMap: wm,
+		workers: make([]*Worker, count),
 	}
-	return
 }
 
 func (w *WorkerPool) Start() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	for i := range w.workers {
+		w.workers[i] = NewWorker(w.c, w.WorkMap)
+		if w.Interval != 0 {
+			w.workers[i].Interval = w.Interval
+		}
 		go w.workers[i].Work()
 	}
 }
