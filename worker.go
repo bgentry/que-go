@@ -34,6 +34,7 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 	}
 	return &Worker{
 		Interval: time.Duration(interval) * time.Second,
+		Queue:    os.Getenv("QUE_QUEUE"),
 		c:        c,
 		m:        m,
 		ch:       make(chan struct{}),
