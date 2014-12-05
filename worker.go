@@ -3,6 +3,8 @@ package que
 import (
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -24,8 +26,14 @@ type Worker struct {
 }
 
 func NewWorker(c *Client, m WorkMap) *Worker {
+	interval := 5
+	if v := os.Getenv("QUE_WAKE_INTERVAL"); v != "" {
+		if newInt, err := strconv.Atoi(v); err == nil {
+			interval = newInt
+		}
+	}
 	return &Worker{
-		Interval: 5 * time.Second,
+		Interval: time.Duration(interval) * time.Second,
 		c:        c,
 		m:        m,
 		ch:       make(chan struct{}),
