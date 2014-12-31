@@ -9,13 +9,24 @@ import (
 	"time"
 )
 
+// WorkFunc is a function that performs a Job. If an error is returned, the job
+// is reenqueued with exponential backoff.
 type WorkFunc func(j *Job) error
 
+// WorkMap is a map of Job names to WorkFuncs that are used to perform Jobs of a
+// given type.
 type WorkMap map[string]WorkFunc
 
+// Worker is a single worker that pulls jobs off the specified Queue. If no Job
+// is found, the Worker will sleep for Interval seconds.
 type Worker struct {
+	// Interval is the amount of time that this Worker should sleep before trying
+	// to find another Job.
 	Interval time.Duration
-	Queue    string
+
+	// Queue is the name of the queue to pull Jobs off of. The default value, "",
+	// is usable and is the default for both que-go and the ruby que library.
+	Queue string
 
 	c *Client
 	m WorkMap
@@ -25,6 +36,15 @@ type Worker struct {
 	ch   chan struct{}
 }
 
+// NewWorker returns a Worker that fetches Jobs from the Client and executes
+// them using WorkMap. If the type of Job is not registered in the WorkMap, it's
+// considered an error and the job is re-enqueued with a backoff.
+//
+// Workers default to an Interval of 5 seconds, which can be overridden by
+// setting the environment variable QUE_WAKE_INTERVAL. The default Queue is the
+// nameless queue "", which can be overridden by setting QUE_QUEUE. Either of
+// these settings can be changed on the returned Worker before it is started
+// with Work().
 func NewWorker(c *Client, m WorkMap) *Worker {
 	interval := 5
 	if v := os.Getenv("QUE_WAKE_INTERVAL"); v != "" {
@@ -41,6 +61,8 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 	}
 }
 
+// Work pulls jobs off the Worker's Queue at its Interval. This function only
+// returns after Shutdown() is called, so it should be run in its own goroutine.
 func (w *Worker) Work() {
 	for {
 		select {
@@ -90,6 +112,10 @@ func (w *Worker) workOne() (didWork bool) {
 	return
 }
 
+// Shutdown tells the worker to finish processing its current job and then stop.
+// There is currently no timeout for in-progress jobs. This function blocks
+// until the Worker has stopped working. It should only be called on an active
+// Worker.
 func (w *Worker) Shutdown() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -104,6 +130,8 @@ func (w *Worker) Shutdown() {
 	close(w.ch)
 }
 
+// WorkerPool is a pool of Workers, each working jobs from the queue QueueName
+// at the specified Interval using the WorkMap.
 type WorkerPool struct {
 	WorkMap   WorkMap
 	Interval  time.Duration
@@ -115,6 +143,7 @@ type WorkerPool struct {
 	done    bool
 }
 
+// NewWorkerPool creates a new WorkerPool with count workers using the Client c.
 func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
 	return &WorkerPool{
 		c:       c,
@@ -123,6 +152,7 @@ func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
 	}
 }
 
+// Start starts all of the Workers in the WorkerPool.
 func (w *WorkerPool) Start() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -135,6 +165,8 @@ func (w *WorkerPool) Start() {
 	}
 }
 
+// Shutdown sends a Shutdown signal to each of the Workers in the WorkerPool and
+// waits for them all to finish shutting down.
 func (w *WorkerPool) Shutdown() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
