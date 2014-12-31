@@ -105,8 +105,9 @@ func (w *Worker) Shutdown() {
 }
 
 type WorkerPool struct {
-	WorkMap  WorkMap
-	Interval time.Duration
+	WorkMap   WorkMap
+	Interval  time.Duration
+	QueueName string
 
 	c       *Client
 	workers []*Worker
@@ -128,9 +129,8 @@ func (w *WorkerPool) Start() {
 
 	for i := range w.workers {
 		w.workers[i] = NewWorker(w.c, w.WorkMap)
-		if w.Interval != 0 {
-			w.workers[i].Interval = w.Interval
-		}
+		w.workers[i].Interval = w.Interval
+		w.workers[i].QueueName = w.QueueName
 		go w.workers[i].Work()
 	}
 }
