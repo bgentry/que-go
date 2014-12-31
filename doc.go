@@ -55,7 +55,7 @@ Here is a complete example showing worker setup and two jobs enqueued, one with 
         "PrintName": printName,
     }
     workers := que.NewWorkerPool(qc, wm, 2) // create a pool w/ 2 workers
-    go h.workers.Start() // work jobs in another goroutine
+    go workers.Start() // work jobs in another goroutine
 
     args, err := json.Marshal(printNameArgs{Name: "bgentry"})
     if err != nil {
@@ -66,7 +66,7 @@ Here is a complete example showing worker setup and two jobs enqueued, one with 
         Type:  "PrintName",
         Args:  args,
     }
-    if err := h.qc.Enqueue(j); err != nil {
+    if err := qc.Enqueue(j); err != nil {
         log.Fatal(err)
     }
 
@@ -75,7 +75,7 @@ Here is a complete example showing worker setup and two jobs enqueued, one with 
         RunAt: time.Now().UTC().Add(30 * time.Second), // delay 30 seconds
         Args:  args,
     }
-    if err := h.qc.Enqueue(j); err != nil {
+    if err := qc.Enqueue(j); err != nil {
         log.Fatal(err)
     }
 
