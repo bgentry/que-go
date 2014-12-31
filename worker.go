@@ -130,12 +130,12 @@ func (w *Worker) Shutdown() {
 	close(w.ch)
 }
 
-// WorkerPool is a pool of Workers, each working jobs from the queue QueueName
+// WorkerPool is a pool of Workers, each working jobs from the queue Queue
 // at the specified Interval using the WorkMap.
 type WorkerPool struct {
-	WorkMap   WorkMap
-	Interval  time.Duration
-	QueueName string
+	WorkMap  WorkMap
+	Interval time.Duration
+	Queue    string
 
 	c       *Client
 	workers []*Worker
@@ -160,7 +160,7 @@ func (w *WorkerPool) Start() {
 	for i := range w.workers {
 		w.workers[i] = NewWorker(w.c, w.WorkMap)
 		w.workers[i].Interval = w.Interval
-		w.workers[i].QueueName = w.QueueName
+		w.workers[i].Queue = w.Queue
 		go w.workers[i].Work()
 	}
 }
