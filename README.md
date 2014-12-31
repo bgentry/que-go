@@ -6,10 +6,6 @@ Que-go is a fully interoperable Golang port of [Chris Hanks][chanks]' [Ruby Que
 queuing library][ruby-que] for PostgreSQL. Que uses PostgreSQL's advisory locks
 for speed and reliability.
 
-## WIP
-
-This is a very early work-in-progress, so I make no guarantees about stability.
-
 ## pgx PostgreSQL driver
 
 This package uses the [pgx][pgx] Go PostgreSQL driver rather than the more
