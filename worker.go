@@ -71,7 +71,7 @@ func (w *Worker) Work() {
 			return
 		case <-time.After(w.Interval):
 			for {
-				if didWork := w.workOne(); !didWork {
+				if didWork := w.WorkOne(); !didWork {
 					break // didn't do any work, go back to sleep
 				}
 			}
@@ -79,7 +79,7 @@ func (w *Worker) Work() {
 	}
 }
 
-func (w *Worker) workOne() (didWork bool) {
+func (w *Worker) WorkOne() (didWork bool) {
 	j, err := w.c.LockJob(w.Queue)
 	if err != nil {
 		log.Printf("attempting to lock job: %v", err)

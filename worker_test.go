@@ -1,6 +1,11 @@
 package que
 
-import "testing"
+import (
+	"io/ioutil"
+	"log"
+	"os"
+	"testing"
+)
 
 func TestWorkerWorkOne(t *testing.T) {
 	c := openTestClient(t)
@@ -15,7 +20,7 @@ func TestWorkerWorkOne(t *testing.T) {
 	}
 	w := NewWorker(c, wm)
 
-	didWork := w.workOne()
+	didWork := w.WorkOne()
 	if didWork {
 		t.Errorf("want didWork=false when no job was queued")
 	}
@@ -24,7 +29,7 @@ func TestWorkerWorkOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	didWork = w.workOne()
+	didWork = w.WorkOne()
 	if !didWork {
 		t.Errorf("want didWork=true")
 	}
@@ -50,4 +55,30 @@ func TestWorkerShutdown(t *testing.T) {
 	if !w.done {
 		t.Errorf("want w.done=true")
 	}
+}
+
+func BenchmarkWorker(b *testing.B) {
+	c := openTestClient(b)
+	log.SetOutput(ioutil.Discard)
+	defer func() {
+		log.SetOutput(os.Stdout)
+	}()
+	defer truncateAndClose(c.pool)
+
+	w := NewWorker(c, WorkMap{"Nil": nilWorker})
+
+	for i := 0; i < b.N; i++ {
+		if err := c.Enqueue(&Job{Type: "Nil"}); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WorkOne()
+	}
+}
+
+func nilWorker(j *Job) error {
+	return nil
 }
