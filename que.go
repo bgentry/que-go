@@ -71,7 +71,7 @@ func (j *Job) Delete() error {
 		return nil
 	}
 
-	_, err := j.conn.Exec(sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	_, err := j.conn.Exec("que_destroy_job", j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (j *Job) Done() {
 	var ok bool
 	// Swallow this error because we don't want an unlock failure to cause work to
 	// stop.
-	_ = j.conn.QueryRow(sqlUnlockJob, j.ID).Scan(&ok)
+	_ = j.conn.QueryRow("que_unlock_job", j.ID).Scan(&ok)
 
 	j.pool.Release(j.conn)
 	j.pool = nil
@@ -111,7 +111,7 @@ func (j *Job) Error(msg string) error {
 	errorCount := j.ErrorCount + 1
 	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
 
-	_, err := j.conn.Exec(sqlSetError, errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
+	_, err := j.conn.Exec("que_set_error", errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 	}
 
 	j := Job{pool: c.pool, conn: conn}
-	err = conn.QueryRow(sqlLockJob, queue).Scan(
+	err = conn.QueryRow("que_lock_job", queue).Scan(
 		&j.Queue,
 		&j.Priority,
 		&j.RunAt,
@@ -246,7 +246,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 	// I'm not sure how to reliably commit a transaction that deletes
 	// the job in a separate thread between lock_job and check_job.
 	var ok bool
-	err = conn.QueryRow(sqlCheckJob, j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
+	err = conn.QueryRow("que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
 	if err != nil {
 		c.pool.Release(conn)
 		if err == pgx.ErrNoRows { // encountered job race condition
@@ -256,4 +256,22 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 	}
 
 	return &j, nil
+}
+
+var preparedStatements = map[string]string{
+	"que_check_job":   sqlCheckJob,
+	"que_destroy_job": sqlDeleteJob,
+	"que_insert_job":  sqlInsertJob,
+	"que_lock_job":    sqlLockJob,
+	"que_set_error":   sqlSetError,
+	"que_unlock_job":  sqlUnlockJob,
+}
+
+func PrepareStatements(conn *pgx.Conn) error {
+	for name, sql := range preparedStatements {
+		if _, err := conn.Prepare(name, sql); err != nil {
+			return err
+		}
+	}
+	return nil
 }

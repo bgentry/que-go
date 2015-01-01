@@ -13,6 +13,7 @@ func openTestClient(t testing.TB) *Client {
 			Database: "que-go-test",
 		},
 		MaxConnections: 5,
+		AfterConnect:   PrepareStatements,
 	}
 	pool, err := pgx.NewConnPool(connPoolConfig)
 	if err != nil {

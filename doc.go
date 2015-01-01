@@ -23,6 +23,19 @@ we'd have to implement our own connection pool. Fortunately, pgx already has a
 perfectly usable one built for us. Even better, it offers better performance
 than pq due largely to its use of binary encoding.
 
+Prepared Statements
+
+que-go relies on prepared statements for performance. As of now these have to
+be initialized manually on your connection pool like so:
+
+    pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+        ConnConfig:   pgxcfg,
+        AfterConnect: que.PrepareStatements,
+    })
+
+If you have suggestions on how to cleanly do this automatically, please open an
+issue!
+
 Usage
 
 Here is a complete example showing worker setup and two jobs enqueued, one with a delay:
@@ -45,10 +58,14 @@ Here is a complete example showing worker setup and two jobs enqueued, one with 
         log.Fatal(err)
     }
 
-    pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{ConnConfig: pgxcfg})
+    pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+        ConnConfig:   pgxcfg,
+        AfterConnect: que.PrepareStatements,
+    })
     if err != nil {
         log.Fatal(err)
     }
+    defer pgxpool.Close()
 
     qc := que.NewClient(pgxpool)
     wm := que.WorkMap{
