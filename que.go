@@ -169,7 +169,7 @@ func execEnqueue(j *Job, q queryable) error {
 	}
 	args := bytea(j.Args)
 
-	_, err := q.Exec(sqlInsertJob, queue, priority, runAt, j.Type, args)
+	_, err := q.Exec("que_insert_job", queue, priority, runAt, j.Type, args)
 	return err
 }
 
