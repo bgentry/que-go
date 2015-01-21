@@ -6,13 +6,15 @@ import (
 	"github.com/jackc/pgx"
 )
 
-func openTestClient(t testing.TB) *Client {
+var testConnConfig = pgx.ConnConfig{
+	Host:     "localhost",
+	Database: "que-go-test",
+}
+
+func openTestClientMaxConns(t testing.TB, maxConnections int) *Client {
 	connPoolConfig := pgx.ConnPoolConfig{
-		ConnConfig: pgx.ConnConfig{
-			Host:     "localhost",
-			Database: "que-go-test",
-		},
-		MaxConnections: 5,
+		ConnConfig: testConnConfig,
+		MaxConnections: maxConnections,
 		AfterConnect:   PrepareStatements,
 	}
 	pool, err := pgx.NewConnPool(connPoolConfig)
@@ -20,6 +22,10 @@ func openTestClient(t testing.TB) *Client {
 		t.Fatal(err)
 	}
 	return NewClient(pool)
+}
+
+func openTestClient(t testing.TB) *Client {
+	return openTestClientMaxConns(t, 5)
 }
 
 func truncateAndClose(pool *pgx.ConnPool) {
