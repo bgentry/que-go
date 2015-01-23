@@ -1,8 +1,12 @@
 package que
 
 import (
+	"fmt"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx"
 )
 
 func TestLockJob(t *testing.T) {
@@ -199,6 +203,178 @@ func TestJobConnRace(t *testing.T) {
 		wg.Done()
 	}()
 	wg.Wait()
+}
+
+// Test the race condition in LockJob
+func TestLockJobAdvisoryRace(t *testing.T) {
+	c := openTestClientMaxConns(t, 2)
+	defer truncateAndClose(c.pool)
+
+	// *pgx.ConnPool doesn't support pools of only one connection.  Make sure
+	// the other one is busy so we know which backend will be used by LockJob
+	// below.
+	unusedConn, err := c.pool.Acquire()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.pool.Release(unusedConn)
+
+	// We use two jobs: the first one is concurrently deleted, and the second
+	// one is returned by LockJob after recovering from the race condition.
+	for i := 0; i < 2; i++ {
+		if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// helper functions
+	newConn := func() *pgx.Conn {
+		conn, err := pgx.Connect(testConnConfig)
+		if err != nil {
+			panic(err)
+		}
+		return conn
+	}
+	getBackendID := func(conn *pgx.Conn) int32 {
+		var backendID int32
+		err := conn.QueryRow(`
+			SELECT backendid
+			FROM pg_stat_get_backend_idset() psgb(backendid)
+			WHERE pg_stat_get_backend_pid(psgb.backendid) = pg_backend_pid()
+		`).Scan(&backendID)
+		if err != nil {
+			panic(err)
+		}
+		return backendID
+	}
+	waitUntilBackendIsWaiting := func (backendID int32, name string) {
+		conn := newConn()
+		i := 0
+		for {
+			var waiting bool
+			err := conn.QueryRow(`SELECT pg_stat_get_backend_waiting($1)`, backendID).Scan(&waiting)
+			if err != nil {
+				panic(err)
+			}
+
+			if waiting {
+				break
+			} else {
+				i++
+				if i >= 10000 / 50 {
+					panic(fmt.Sprintf("timed out while waiting for %s", name))
+				}
+
+				time.Sleep(50 * time.Millisecond)
+			}
+		}
+
+	}
+
+	// Reproducing the race condition is a bit tricky.  The idea is to form a
+	// lock queue on the relation that looks like this:
+	//
+	//   AccessExclusive <- AccessShare  <- AccessExclusive ( <- AccessShare )
+	//
+	// where the leftmost AccessShare lock is the one implicitly taken by the
+	// sqlLockJob query.  Once we release the leftmost AccessExclusive lock
+	// without releasing the rightmost one, the session holding the rightmost
+	// AccessExclusiveLock can run the necessary DELETE before the sqlCheckJob
+	// query runs (since it'll be blocked behind the rightmost AccessExclusive
+	// Lock).
+	//
+	deletedJobIDChan := make(chan int64, 1)
+	lockJobBackendIDChan := make(chan int32)
+	secondAccessExclusiveBackendIDChan := make(chan int32)
+
+	go func() {
+		conn := newConn()
+		defer conn.Close()
+
+		tx, err := conn.Begin()
+		if err != nil {
+			panic(err)
+		}
+		_, err = tx.Exec(`LOCK TABLE que_jobs IN ACCESS EXCLUSIVE MODE`)
+		if err != nil {
+			panic(err)
+		}
+
+		// first wait for LockJob to appear behind us
+		backendID := <-lockJobBackendIDChan
+		waitUntilBackendIsWaiting(backendID, "LockJob")
+
+		// then for the AccessExclusive lock to appear behind that one
+		backendID = <-secondAccessExclusiveBackendIDChan
+		waitUntilBackendIsWaiting(backendID, "second access exclusive lock")
+
+		err = tx.Rollback()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	go func() {
+		conn := newConn()
+		defer conn.Close()
+
+		// synchronization point
+		secondAccessExclusiveBackendIDChan <- getBackendID(conn)
+
+		tx, err := conn.Begin()
+		if err != nil {
+			panic(err)
+		}
+		_, err = tx.Exec(`LOCK TABLE que_jobs IN ACCESS EXCLUSIVE MODE`)
+		if err != nil {
+			panic(err)
+		}
+
+		// Fake a concurrent transaction grabbing the job
+		var jid int64
+		err = tx.QueryRow(`
+			DELETE FROM que_jobs
+			WHERE job_id =
+				(SELECT min(job_id)
+				 FROM que_jobs)
+			RETURNING job_id
+		`).Scan(&jid)
+		if err != nil {
+			panic(err)
+		}
+
+		deletedJobIDChan <- jid
+
+		err = tx.Commit()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	conn, err := c.pool.Acquire()
+	if err != nil {
+		panic(err)
+	}
+	ourBackendID := getBackendID(conn)
+	c.pool.Release(conn)
+
+	// synchronization point
+	lockJobBackendIDChan <- ourBackendID
+
+	job, err := c.LockJob("")
+	if err != nil {
+		panic(err)
+	}
+	defer job.Done()
+
+	deletedJobID := <-deletedJobIDChan
+
+	t.Logf("Got id %d", job.ID)
+	t.Logf("Concurrently deleted id %d", deletedJobID)
+
+	if deletedJobID >= job.ID {
+		t.Fatalf("deleted job id %d must be smaller than job.ID %d", deletedJobID, job.ID)
+	}
 }
 
 func TestJobDelete(t *testing.T) {

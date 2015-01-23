@@ -195,6 +195,16 @@ type queryable interface {
 	QueryRow(sql string, args ...interface{}) *pgx.Row
 }
 
+// Maximum number of loop iterations in LockJob before giving up.  This is to
+// avoid looping forever in case something is wrong.
+const maxLockJobAttempts = 10
+
+// Returned by LockJob if a job could not be retrieved from the queue after
+// several attempts because of concurrently running transactions.  This error
+// should not be returned unless the queue is under extremely heavy
+// concurrency.
+var ErrAgain = errors.New("maximum number of LockJob attempts reached")
+
 // TODO: consider an alternate Enqueue func that also returns the newly
 // enqueued Job struct. The query sqlInsertJobAndReturn was already written for
 // this.
@@ -216,46 +226,56 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 	}
 
 	j := Job{pool: c.pool, conn: conn}
-	err = conn.QueryRow("que_lock_job", queue).Scan(
-		&j.Queue,
-		&j.Priority,
-		&j.RunAt,
-		&j.ID,
-		&j.Type,
-		&j.Args,
-		&j.ErrorCount,
-	)
-	if err != nil {
-		c.pool.Release(conn)
-		if err == pgx.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
 
-	// Deal with race condition. Explanation from the Ruby Que gem:
-	//
-	// Edge case: It's possible for the lock_job query to have
-	// grabbed a job that's already been worked, if it took its MVCC
-	// snapshot while the job was processing, but didn't attempt the
-	// advisory lock until it was finished. Since we have the lock, a
-	// previous worker would have deleted it by now, so we just
-	// double check that it still exists before working it.
-	//
-	// Note that there is currently no spec for this behavior, since
-	// I'm not sure how to reliably commit a transaction that deletes
-	// the job in a separate thread between lock_job and check_job.
-	var ok bool
-	err = conn.QueryRow("que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
-	if err != nil {
-		c.pool.Release(conn)
-		if err == pgx.ErrNoRows { // encountered job race condition
-			return nil, nil
+	for i := 0; i < maxLockJobAttempts; i++ {
+		err = conn.QueryRow("que_lock_job", queue).Scan(
+			&j.Queue,
+			&j.Priority,
+			&j.RunAt,
+			&j.ID,
+			&j.Type,
+			&j.Args,
+			&j.ErrorCount,
+		)
+		if err != nil {
+			c.pool.Release(conn)
+			if err == pgx.ErrNoRows {
+				return nil, nil
+			}
+			return nil, err
 		}
-		return nil, err
-	}
 
-	return &j, nil
+		// Deal with race condition. Explanation from the Ruby Que gem:
+		//
+		// Edge case: It's possible for the lock_job query to have
+		// grabbed a job that's already been worked, if it took its MVCC
+		// snapshot while the job was processing, but didn't attempt the
+		// advisory lock until it was finished. Since we have the lock, a
+		// previous worker would have deleted it by now, so we just
+		// double check that it still exists before working it.
+		//
+		// Note that there is currently no spec for this behavior, since
+		// I'm not sure how to reliably commit a transaction that deletes
+		// the job in a separate thread between lock_job and check_job.
+		var ok bool
+		err = conn.QueryRow("que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
+		if err == nil {
+			return &j, nil
+		} else if err == pgx.ErrNoRows {
+			// Encountered job race condition; start over from the beginning.
+			// We're still holding the advisory lock, though, so we need to
+			// release it before resuming.  Otherwise we leak the lock,
+			// eventually causing the server to run out of locks.
+			//
+			// Also swallow the possible error, exactly like in Done.
+			_ = conn.QueryRow("que_unlock_job", j.ID).Scan(&ok)
+			continue
+		} else {
+			c.pool.Release(conn)
+			return nil, err
+		}
+	}
+	return nil, ErrAgain
 }
 
 var preparedStatements = map[string]string{
