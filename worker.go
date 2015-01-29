@@ -36,6 +36,16 @@ type Worker struct {
 	ch   chan struct{}
 }
 
+var defaultWakeInterval = 5 * time.Second
+
+func init() {
+	if v := os.Getenv("QUE_WAKE_INTERVAL"); v != "" {
+		if newInt, err := strconv.Atoi(v); err == nil {
+			defaultWakeInterval = time.Duration(newInt) * time.Second
+		}
+	}
+}
+
 // NewWorker returns a Worker that fetches Jobs from the Client and executes
 // them using WorkMap. If the type of Job is not registered in the WorkMap, it's
 // considered an error and the job is re-enqueued with a backoff.
@@ -46,14 +56,8 @@ type Worker struct {
 // these settings can be changed on the returned Worker before it is started
 // with Work().
 func NewWorker(c *Client, m WorkMap) *Worker {
-	interval := 5
-	if v := os.Getenv("QUE_WAKE_INTERVAL"); v != "" {
-		if newInt, err := strconv.Atoi(v); err == nil {
-			interval = newInt
-		}
-	}
 	return &Worker{
-		Interval: time.Duration(interval) * time.Second,
+		Interval: defaultWakeInterval,
 		Queue:    os.Getenv("QUE_QUEUE"),
 		c:        c,
 		m:        m,
@@ -146,9 +150,10 @@ type WorkerPool struct {
 // NewWorkerPool creates a new WorkerPool with count workers using the Client c.
 func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
 	return &WorkerPool{
-		c:       c,
-		WorkMap: wm,
-		workers: make([]*Worker, count),
+		c:        c,
+		WorkMap:  wm,
+		Interval: defaultWakeInterval,
+		workers:  make([]*Worker, count),
 	}
 }
 
