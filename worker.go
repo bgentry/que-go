@@ -1,9 +1,11 @@
 package que
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -92,7 +94,6 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if j == nil {
 		return // no job was available
 	}
-	defer j.Done()
 
 	didWork = true
 
@@ -104,15 +105,53 @@ func (w *Worker) WorkOne() (didWork bool) {
 		return
 	}
 
-	if err = wf(j); err != nil {
-		j.Error(err.Error())
-		return
-	}
+	defer func() {
 
-	if err = j.Delete(); err != nil {
-		log.Printf("attempting to delete job %d: %v", j.ID, err)
-	}
-	log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
+		if r := recover(); r != nil {
+
+			// job caused a severe panic
+			// concat panic message and stacktrace into last_error
+			stackBufLen := 1024
+			stackBuf := make([]byte, stackBufLen)
+			n := runtime.Stack(stackBuf, false)
+
+			buf := &bytes.Buffer{}
+
+			fmt.Fprintf(buf, "%v\n", r)
+			for i := 0; i < n; i++ {
+				buf.WriteByte(stackBuf[i])
+			}
+			if n == stackBufLen {
+				buf.WriteString("[...]")
+			}
+
+			stacktrace := buf.String()
+
+			log.Printf("PANIC in job_id=%d", j.ID)
+			log.Print(stacktrace)
+
+			j.Error(stacktrace)
+
+		} else if err != nil {
+
+			// job returned a normal error
+			j.Error(err.Error())
+
+		} else {
+
+			// No error and no panic: job has successfully completed
+			if err = j.Delete(); err != nil {
+				log.Printf("attempting to delete job %d: %v", j.ID, err)
+			}
+			log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
+
+		}
+
+		j.Done()
+	}()
+
+	err = wf(j)
+
 	return
 }
 
