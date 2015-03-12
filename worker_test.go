@@ -193,3 +193,60 @@ func TestWorkerWorkPanics(t *testing.T) {
 		t.Errorf("want LastError contains \"worker_test.go:\" was: %q", j.LastError.String)
 	}
 }
+
+func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
+	c := openTestClient(t)
+	defer truncateAndClose(c.pool)
+
+	currentConns := c.pool.Stat().CurrentConnections
+	availConns := c.pool.Stat().AvailableConnections
+
+	success := false
+	wm := WorkMap{}
+	w := NewWorker(c, wm)
+
+	didWork := w.WorkOne()
+	if didWork {
+		t.Errorf("want didWork=false when no job was queued")
+	}
+
+	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
+		t.Fatal(err)
+	}
+
+	didWork = w.WorkOne()
+	if !didWork {
+		t.Errorf("want didWork=true")
+	}
+	if success {
+		t.Errorf("want success=false")
+	}
+
+	if currentConns != c.pool.Stat().CurrentConnections {
+		t.Errorf("want currentConns euqual: before=%d  after=%d", currentConns, c.pool.Stat().CurrentConnections)
+	}
+	if availConns != c.pool.Stat().AvailableConnections {
+		t.Errorf("want availConns euqual: before=%d  after=%d", availConns, c.pool.Stat().AvailableConnections)
+	}
+
+	tx, err := c.pool.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	j, err := findOneJob(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j.ErrorCount != 1 {
+		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
+	}
+	if !j.LastError.Valid {
+		t.Errorf("want LastError IS NOT NULL")
+	}
+	if j.LastError.String != "unknown job type: \"MyJob\"" {
+		t.Errorf("want LastError contains \"unknown job type: \"MyJob\"\" was: %q", j.LastError.String)
+	}
+
+}

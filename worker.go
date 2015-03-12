@@ -97,14 +97,6 @@ func (w *Worker) WorkOne() (didWork bool) {
 
 	didWork = true
 
-	wf, ok := w.m[j.Type]
-	if !ok {
-		if err = j.Error(fmt.Sprintf("unknown job type: %q", j.Type)); err != nil {
-			log.Printf("attempting to save error on job %d: %v", j.ID, err)
-		}
-		return
-	}
-
 	defer func() {
 
 		if r := recover(); r != nil {
@@ -146,9 +138,18 @@ func (w *Worker) WorkOne() (didWork bool) {
 			log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
 
 		}
-
 		j.Done()
 	}()
+
+	wf, ok := w.m[j.Type]
+	if !ok {
+		if err = j.Error(fmt.Sprintf("unknown job type: %q", j.Type)); err != nil {
+			log.Printf("attempting to save error on job %d: %v", j.ID, err)
+		}
+		log.Printf("unknown job type: %q", j.Type)
+		// must return AFTER defer was setup - otherwise job would not finish in that case
+		return
+	}
 
 	err = wf(j)
 
