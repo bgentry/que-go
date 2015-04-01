@@ -186,6 +186,7 @@ func TestWorkerWorkPanics(t *testing.T) {
 	if !strings.Contains(j.LastError.String, "the panic msg\n") {
 		t.Errorf("want LastError contains \"the panic msg\\n\" was: %q", j.LastError.String)
 	}
+	// basic check if a stacktrace is there - not the stacktrace format itself
 	if !strings.Contains(j.LastError.String, "worker.go:") {
 		t.Errorf("want LastError contains \"worker.go:\" was: %q", j.LastError.String)
 	}
@@ -243,10 +244,10 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
 	if !j.LastError.Valid {
-		t.Errorf("want LastError IS NOT NULL")
+		t.Fatal("want non-nil LastError")
 	}
-	if j.LastError.String != "unknown job type: \"MyJob\"" {
-		t.Errorf("want LastError contains \"unknown job type: \"MyJob\"\" was: %q", j.LastError.String)
+	if want := "unknown job type: \"MyJob\""; j.LastError.String != want {
+		t.Errorf("want LastError=%q, got %q", want, j.LastError.String)
 	}
 
 }
