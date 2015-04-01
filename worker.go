@@ -1,9 +1,11 @@
 package que
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -92,7 +94,10 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if j == nil {
 		return // no job was available
 	}
+
 	defer j.Done()
+
+	defer w.recoverPanic(j)
 
 	didWork = true
 
@@ -101,19 +106,53 @@ func (w *Worker) WorkOne() (didWork bool) {
 		if err = j.Error(fmt.Sprintf("unknown job type: %q", j.Type)); err != nil {
 			log.Printf("attempting to save error on job %d: %v", j.ID, err)
 		}
+		log.Printf("unknown job type: %q", j.Type)
+		// must return AFTER defer was setup - otherwise job would not finish in that case
 		return
 	}
 
 	if err = wf(j); err != nil {
+		// job returned a normal error
 		j.Error(err.Error())
 		return
 	}
 
+	// job has successfully completed
 	if err = j.Delete(); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
 	log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
+
 	return
+}
+
+// recoverPanic tries to handle panics in job execution.
+// A stacktrace is stored into Job last_error.
+func (w *Worker) recoverPanic(j *Job) {
+	if r := recover(); r != nil {
+
+		// concat panic message and stacktrace into last_error
+		stackBufLen := 1024
+		stackBuf := make([]byte, stackBufLen)
+		n := runtime.Stack(stackBuf, false)
+
+		buf := &bytes.Buffer{}
+
+		fmt.Fprintf(buf, "%v\n", r)
+		for i := 0; i < n; i++ {
+			buf.WriteByte(stackBuf[i])
+		}
+		if n == stackBufLen {
+			buf.WriteString("[...]")
+		}
+
+		stacktrace := buf.String()
+
+		log.Printf("event=panic job_id=%d job_type=%s", j.ID, j.Type)
+		log.Println(stacktrace)
+
+		j.Error(stacktrace)
+	}
 }
 
 // Shutdown tells the worker to finish processing its current job and then stop.
