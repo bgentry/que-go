@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx"
+	pgx "gopkg.in/jackc/pgx.v2"
 )
 
 func TestLockJob(t *testing.T) {
@@ -247,7 +247,7 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 		}
 		return backendID
 	}
-	waitUntilBackendIsWaiting := func (backendID int32, name string) {
+	waitUntilBackendIsWaiting := func(backendID int32, name string) {
 		conn := newConn()
 		i := 0
 		for {
@@ -261,7 +261,7 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 				break
 			} else {
 				i++
-				if i >= 10000 / 50 {
+				if i >= 10000/50 {
 					panic(fmt.Sprintf("timed out while waiting for %s", name))
 				}
 
