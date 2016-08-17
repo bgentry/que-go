@@ -1,4 +1,4 @@
-CREATE TABLE que_jobs
+CREATE TABLE IF NOT EXISTS que_jobs
 (
   priority    smallint    NOT NULL DEFAULT 100,
   run_at      timestamptz NOT NULL DEFAULT now(),
