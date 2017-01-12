@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx"
+	pgx "gopkg.in/jackc/pgx.v2"
 )
 
 // Job is a single unit of work for Que to perform.
