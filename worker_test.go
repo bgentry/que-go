@@ -15,7 +15,7 @@ func init() {
 
 func TestWorkerWorkOne(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(c.db)
 
 	success := false
 	wm := WorkMap{
@@ -46,7 +46,7 @@ func TestWorkerWorkOne(t *testing.T) {
 
 func TestWorkerShutdown(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(c.db)
 
 	w := NewWorker(c, WorkMap{})
 	finished := false
@@ -69,7 +69,7 @@ func BenchmarkWorker(b *testing.B) {
 	defer func() {
 		log.SetOutput(os.Stdout)
 	}()
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(c.db)
 
 	w := NewWorker(c, WorkMap{"Nil": nilWorker})
 
@@ -91,7 +91,7 @@ func nilWorker(j *Job) error {
 
 func TestWorkerWorkReturnsError(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(c.db)
 
 	called := 0
 	wm := WorkMap{
@@ -119,7 +119,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 		t.Errorf("want called=1 was: %d", called)
 	}
 
-	tx, err := c.pool.Begin()
+	tx, err := c.db.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 
 func TestWorkerWorkRescuesPanic(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(c.db)
 
 	called := 0
 	wm := WorkMap{
@@ -163,7 +163,7 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 		t.Errorf("want called=1 was: %d", called)
 	}
 
-	tx, err := c.pool.Begin()
+	tx, err := c.db.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,10 +193,7 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 
 func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
-
-	currentConns := c.pool.Stat().CurrentConnections
-	availConns := c.pool.Stat().AvailableConnections
+	defer truncateAndClose(c.db)
 
 	success := false
 	wm := WorkMap{}
@@ -219,14 +216,7 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 		t.Errorf("want success=false")
 	}
 
-	if currentConns != c.pool.Stat().CurrentConnections {
-		t.Errorf("want currentConns euqual: before=%d  after=%d", currentConns, c.pool.Stat().CurrentConnections)
-	}
-	if availConns != c.pool.Stat().AvailableConnections {
-		t.Errorf("want availConns euqual: before=%d  after=%d", availConns, c.pool.Stat().AvailableConnections)
-	}
-
-	tx, err := c.pool.Begin()
+	tx, err := c.db.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
