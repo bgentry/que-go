@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/pgtype"
 )
 
 func TestLockJob(t *testing.T) {
@@ -52,7 +53,7 @@ func TestLockJob(t *testing.T) {
 	if want := int32(0); j.ErrorCount != want {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
 	}
-	if j.LastError.Valid {
+	if j.LastError.Status == pgtype.Present {
 		t.Errorf("want no LastError, got %v", j.LastError)
 	}
 
@@ -235,24 +236,22 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 		}
 		return conn
 	}
-	getBackendID := func(conn *pgx.Conn) int32 {
-		var backendID int32
+	getBackendPID := func(conn *pgx.Conn) int32 {
+		var backendPID int32
 		err := conn.QueryRow(`
-			SELECT backendid
-			FROM pg_stat_get_backend_idset() psgb(backendid)
-			WHERE pg_stat_get_backend_pid(psgb.backendid) = pg_backend_pid()
-		`).Scan(&backendID)
+			SELECT pg_backend_pid()
+		`).Scan(&backendPID)
 		if err != nil {
 			panic(err)
 		}
-		return backendID
+		return backendPID
 	}
-	waitUntilBackendIsWaiting := func (backendID int32, name string) {
+	waitUntilBackendIsWaiting := func(backendPID int32, name string) {
 		conn := newConn()
 		i := 0
 		for {
 			var waiting bool
-			err := conn.QueryRow(`SELECT pg_stat_get_backend_waiting($1)`, backendID).Scan(&waiting)
+			err := conn.QueryRow(`SELECT wait_event is not null from pg_stat_activity where pid=$1`, backendPID).Scan(&waiting)
 			if err != nil {
 				panic(err)
 			}
@@ -261,7 +260,7 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 				break
 			} else {
 				i++
-				if i >= 10000 / 50 {
+				if i >= 10000/50 {
 					panic(fmt.Sprintf("timed out while waiting for %s", name))
 				}
 
@@ -319,7 +318,7 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 		defer conn.Close()
 
 		// synchronization point
-		secondAccessExclusiveBackendIDChan <- getBackendID(conn)
+		secondAccessExclusiveBackendIDChan <- getBackendPID(conn)
 
 		tx, err := conn.Begin()
 		if err != nil {
@@ -355,7 +354,7 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	ourBackendID := getBackendID(conn)
+	ourBackendID := getBackendPID(conn)
 	c.pool.Release(conn)
 
 	// synchronization point
@@ -608,7 +607,7 @@ func TestJobError(t *testing.T) {
 	}
 	defer j2.Done()
 
-	if !j2.LastError.Valid || j2.LastError.String != msg {
+	if j2.LastError.Status == pgtype.Null || j2.LastError.String != msg {
 		t.Errorf("want LastError=%q, got %q", msg, j2.LastError.String)
 	}
 	if j2.ErrorCount != 1 {

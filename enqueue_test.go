@@ -3,6 +3,8 @@ package que
 import (
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/pgtype"
 )
 
 func TestEnqueueOnlyType(t *testing.T) {
@@ -40,7 +42,7 @@ func TestEnqueueOnlyType(t *testing.T) {
 	if want := int32(0); j.ErrorCount != want {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
 	}
-	if j.LastError.Valid {
+	if j.LastError.Status == pgtype.Present {
 		t.Errorf("want no LastError, got %v", j.LastError)
 	}
 }

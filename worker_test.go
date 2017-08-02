@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/pgtype"
 )
 
 func init() {
@@ -132,7 +134,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 	if j.ErrorCount != 1 {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
-	if !j.LastError.Valid {
+	if j.LastError.Status == pgtype.Null {
 		t.Errorf("want LastError IS NOT NULL")
 	}
 	if j.LastError.String != "the error msg" {
@@ -176,7 +178,7 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 	if j.ErrorCount != 1 {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
-	if !j.LastError.Valid {
+	if j.LastError.Status == pgtype.Null {
 		t.Errorf("want LastError IS NOT NULL")
 	}
 	if !strings.Contains(j.LastError.String, "the panic msg\n") {
@@ -239,7 +241,7 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 	if j.ErrorCount != 1 {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
-	if !j.LastError.Valid {
+	if j.LastError.Status == pgtype.Null {
 		t.Fatal("want non-nil LastError")
 	}
 	if want := "unknown job type: \"MyJob\""; j.LastError.String != want {
