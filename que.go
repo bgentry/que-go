@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/pgtype"
 )
 
 // Job is a single unit of work for Que to perform.
@@ -39,7 +40,7 @@ type Job struct {
 
 	// LastError is the error message or stack trace from the last time the job
 	// failed. It is ignored on job creation.
-	LastError pgx.NullString
+	LastError pgtype.Text
 
 	mu      sync.Mutex
 	deleted bool
@@ -155,38 +156,40 @@ func execEnqueue(j *Job, q queryable) error {
 		return ErrMissingType
 	}
 
-	queue := pgx.NullString{
+	queue := &pgtype.Text{
 		String: j.Queue,
-		Valid:  j.Queue != "",
+		Status: pgtype.Null,
 	}
-	priority := pgx.NullInt16{
-		Int16: int16(j.Priority),
-		Valid: j.Priority != 0,
+	if j.Queue != "" {
+		queue.Status = pgtype.Present
 	}
-	runAt := pgx.NullTime{
-		Time:  j.RunAt,
-		Valid: !j.RunAt.IsZero(),
+
+	priority := &pgtype.Int2{
+		Int:    j.Priority,
+		Status: pgtype.Null,
 	}
-	args := bytea(j.Args)
+	if j.Priority != 0 {
+		priority.Status = pgtype.Present
+	}
+
+	runAt := &pgtype.Timestamptz{
+		Time:   j.RunAt,
+		Status: pgtype.Null,
+	}
+	if !j.RunAt.IsZero() {
+		runAt.Status = pgtype.Present
+	}
+
+	args := &pgtype.Bytea{
+		Bytes:  j.Args,
+		Status: pgtype.Null,
+	}
+	if len(j.Args) != 0 {
+		args.Status = pgtype.Present
+	}
 
 	_, err := q.Exec("que_insert_job", queue, priority, runAt, j.Type, args)
 	return err
-}
-
-type bytea []byte
-
-func (b bytea) Encode(w *pgx.WriteBuf, oid pgx.Oid) error {
-	if len(b) == 0 {
-		w.WriteInt32(-1)
-		return nil
-	}
-	w.WriteInt32(int32(len(b)))
-	w.WriteBytes(b)
-	return nil
-}
-
-func (b bytea) FormatCode() int16 {
-	return pgx.TextFormatCode
 }
 
 type queryable interface {

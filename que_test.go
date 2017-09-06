@@ -13,7 +13,7 @@ var testConnConfig = pgx.ConnConfig{
 
 func openTestClientMaxConns(t testing.TB, maxConnections int) *Client {
 	connPoolConfig := pgx.ConnPoolConfig{
-		ConnConfig: testConnConfig,
+		ConnConfig:     testConnConfig,
 		MaxConnections: maxConnections,
 		AfterConnect:   PrepareStatements,
 	}
