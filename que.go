@@ -278,6 +278,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			return nil, err
 		}
 	}
+	c.pool.Release(conn)
 	return nil, ErrAgain
 }
 
