@@ -217,7 +217,11 @@ func (w *WorkerPool) Shutdown() {
 
 	for _, worker := range w.workers {
 		go func(worker *Worker) {
-			worker.Shutdown()
+			// If Shutdown is called before Start has been called,
+			// then these are nil, so don't try to close them
+			if worker != nil {
+				worker.Shutdown()
+			}
 			wg.Done()
 		}(worker)
 	}
