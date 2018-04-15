@@ -151,7 +151,6 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 		"MyJob": func(j *Job) error {
 			called++
 			panic("the panic msg")
-			return nil
 		},
 	}
 	w := NewWorker(c, wm)

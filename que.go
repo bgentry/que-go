@@ -202,7 +202,7 @@ type queryable interface {
 // avoid looping forever in case something is wrong.
 const maxLockJobAttempts = 10
 
-// Returned by LockJob if a job could not be retrieved from the queue after
+// ErrAgain returned by LockJob if a job could not be retrieved from the queue after
 // several attempts because of concurrently running transactions.  This error
 // should not be returned unless the queue is under extremely heavy
 // concurrency.

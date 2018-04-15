@@ -1,5 +1,5 @@
 /*
-Package que-go is a fully interoperable Golang port of Chris Hanks' Ruby Que
+Package que is a fully interoperable Golang port of Chris Hanks' Ruby Que
 queueing library for PostgreSQL. Que uses PostgreSQL's advisory locks
 for speed and reliability. See the original Que documentation for more details:
 https://github.com/chanks/que
