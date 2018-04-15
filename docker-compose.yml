@@ -1,0 +1,12 @@
+version: '2'
+services:
+
+  postgres:
+    image: postgres:9.6-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: que-go-test
+      POSTGRES_USER: que-go-test
+      POSTGRES_PASSWORD: que-go-test
+      PGPASSWORD: que-go-test
