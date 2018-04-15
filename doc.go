@@ -28,8 +28,8 @@ Prepared Statements
 que-go relies on prepared statements for performance. As of now these have to
 be initialized manually on your connection pool like so:
 
-    pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-        ConnConfig:   pgxcfg,
+    pgxPool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+        ConnConfig:   pgxCfg,
         AfterConnect: que.PrepareStatements,
     })
 
@@ -53,26 +53,28 @@ Here is a complete example showing worker setup and two jobs enqueued, one with 
         return nil
     }
 
-    pgxcfg, err := pgx.ParseURI(os.Getenv("DATABASE_URL"))
+    pgxCfg, err := pgx.ParseURI(os.Getenv("DATABASE_URL"))
     if err != nil {
         log.Fatal(err)
     }
 
-    pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
-        ConnConfig:   pgxcfg,
+    pgxPool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
+        ConnConfig:   pgxCfg,
         AfterConnect: que.PrepareStatements,
     })
     if err != nil {
         log.Fatal(err)
     }
-    defer pgxpool.Close()
+    defer pgxPool.Close()
 
-    qc := que.NewClient(pgxpool)
+    qc := que.NewClient(pgxPool)
     wm := que.WorkMap{
         "PrintName": printName,
     }
-    workers := que.NewWorkerPool(qc, wm, 2) // create a pool w/ 2 workers
-    go workers.Start() // work jobs in another goroutine
+    // create a pool w/ 2 workers
+    workers := que.NewWorkerPool(qc, wm, 2, que.PoolWorkerQueue("name_printer"))
+    // work jobs in another goroutine
+    go workers.Start()
 
     args, err := json.Marshal(printNameArgs{Name: "bgentry"})
     if err != nil {
