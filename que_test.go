@@ -9,6 +9,8 @@ import (
 var testConnConfig = pgx.ConnConfig{
 	Host:     "localhost",
 	Database: "que-go-test",
+	User:     "que-go-test",
+	Password: "que-go-test",
 }
 
 func openTestClientMaxConns(t testing.TB, maxConnections int) *Client {

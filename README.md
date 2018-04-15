@@ -31,3 +31,25 @@ Please see the [godocs][godoc] for more info and examples.
 [ruby-que]: https://github.com/chanks/que
 [pgx]: https://github.com/jackc/pgx
 [pq]: https://github.com/lib/pq
+
+## Running tests
+
+The package is bundled with `docker-compose.yml` for running integration tests
+that use PostgreSQL. Run the DB in the container and initialize schema:
+
+```
+$ docker-compose up -d
+$ docker-compose exec -T postgres psql que-go-test -U que-go-test < schema.sql
+```
+
+Now you're ready to run tests:
+
+```
+$ go test
+```
+
+After finishing with tests bring the environment down with:
+
+```
+$ docker-compose down -v
+```
