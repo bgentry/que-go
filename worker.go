@@ -53,18 +53,25 @@ func init() {
 // considered an error and the job is re-enqueued with a backoff.
 //
 // Workers default to an Interval of 5 seconds, which can be overridden by
-// setting the environment variable QUE_WAKE_INTERVAL. The default Queue is the
-// nameless queue "", which can be overridden by setting QUE_QUEUE. Either of
+// setting the environment variable QUE_WAKE_INTERVAL or WakeInterval option.
+// The default Queue is the nameless queue "", which can be overridden by
+// setting the environment variable QUE_QUEUE or WorkerQueue option. Also
 // these settings can be changed on the returned Worker before it is started
 // with Work().
-func NewWorker(c *Client, m WorkMap) *Worker {
-	return &Worker{
+func NewWorker(c *Client, m WorkMap, options ...WorkerOption) *Worker {
+	instance := Worker{
 		Interval: defaultWakeInterval,
 		Queue:    os.Getenv("QUE_QUEUE"),
 		c:        c,
 		m:        m,
 		ch:       make(chan struct{}),
 	}
+
+	for _, option := range options {
+		option(&instance)
+	}
+
+	return &instance
 }
 
 // Work pulls jobs off the Worker's Queue at its Interval. This function only
@@ -173,13 +180,25 @@ type WorkerPool struct {
 }
 
 // NewWorkerPool creates a new WorkerPool with count workers using the Client c.
-func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
-	return &WorkerPool{
+//
+// Each Worker in the pool default to an Interval of 5 seconds, which can be
+// overridden by PoolWakeInterval option. The default Queue is the
+// nameless queue "", which can be overridden by PoolWorkerQueue option. Also
+// these settings can be changed on the returned WorkerPool before it is started
+// with Start().
+func NewWorkerPool(c *Client, wm WorkMap, count int, options ...WorkerPoolOption) *WorkerPool {
+	instance := WorkerPool{
 		c:        c,
 		WorkMap:  wm,
 		Interval: defaultWakeInterval,
 		workers:  make([]*Worker, count),
 	}
+
+	for _, option := range options {
+		option(&instance)
+	}
+
+	return &instance
 }
 
 // Start starts all of the Workers in the WorkerPool.
