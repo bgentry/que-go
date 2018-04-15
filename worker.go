@@ -92,6 +92,7 @@ func (w *Worker) Work() {
 	}
 }
 
+// WorkOne tries to consume single message from the queue.
 func (w *Worker) WorkOne() (didWork bool) {
 	j, err := w.c.LockJob(w.Queue)
 	if err != nil {

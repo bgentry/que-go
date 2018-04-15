@@ -202,7 +202,7 @@ type queryable interface {
 // avoid looping forever in case something is wrong.
 const maxLockJobAttempts = 10
 
-// Returned by LockJob if a job could not be retrieved from the queue after
+// ErrAgain returned by LockJob if a job could not be retrieved from the queue after
 // several attempts because of concurrently running transactions.  This error
 // should not be returned unless the queue is under extremely heavy
 // concurrency.
@@ -291,6 +291,7 @@ var preparedStatements = map[string]string{
 	"que_unlock_job":  sqlUnlockJob,
 }
 
+// PrepareStatements creates a prepared statements within a connection to use for internal routines.
 func PrepareStatements(conn *pgx.Conn) error {
 	for name, sql := range preparedStatements {
 		if _, err := conn.Prepare(name, sql); err != nil {
