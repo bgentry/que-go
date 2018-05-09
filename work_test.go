@@ -252,8 +252,13 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 		for {
 			var waiting bool
 			err := conn.QueryRow(`SELECT wait_event is not null from pg_stat_activity where pid=$1`, backendPID).Scan(&waiting)
+
+			// This is a fallback. In PostgreSQL version 9.6 'waiting' was replaced with 'wait_event'.
 			if err != nil {
-				panic(err)
+				err := conn.QueryRow(`SELECT waiting from pg_stat_activity where pid=$1`, backendPID).Scan(&waiting)
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			if waiting {
