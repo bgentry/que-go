@@ -44,8 +44,17 @@ type Job struct {
 
 	mu      sync.Mutex
 	deleted bool
-	pool    *pgx.ConnPool
-	conn    *pgx.Conn
+
+	delayFunction func(int32) int
+	pool          *pgx.ConnPool
+	conn          *pgx.Conn
+}
+
+// DelayFunction returns the amount of seconds to wait as a function of
+// the number of retries.
+var DelayFunction func(int32) int
+var defaultDelayFunction = func(errorCount int32) int {
+	return intPow(int(errorCount), 4) + 3
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -110,7 +119,13 @@ func (j *Job) Done() {
 // the pool.
 func (j *Job) Error(msg string) error {
 	errorCount := j.ErrorCount + 1
-	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
+
+	var delay int
+	if j.delayFunction == nil {
+		delay = defaultDelayFunction(j.ErrorCount)
+	} else {
+		delay = j.delayFunction(j.ErrorCount)
+	}
 
 	_, err := j.conn.Exec("que_set_error", errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
@@ -228,7 +243,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 		return nil, err
 	}
 
-	j := Job{pool: c.pool, conn: conn}
+	j := Job{pool: c.pool, conn: conn, delayFunction: DelayFunction}
 
 	for i := 0; i < maxLockJobAttempts; i++ {
 		err = conn.QueryRow("que_lock_job", queue).Scan(
