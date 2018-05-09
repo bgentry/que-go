@@ -34,6 +34,10 @@ type Job struct {
 	// Args must be the bytes of a valid JSON string
 	Args []byte
 
+	// Delay function returns the amount of seconds to wait as a function of
+	// the number of retries.
+	DelayFunction func(int32) int
+
 	// ErrorCount is the number of times this job has attempted to run, but
 	// failed with an error. It is ignored on job creation.
 	ErrorCount int32
@@ -46,6 +50,10 @@ type Job struct {
 	deleted bool
 	pool    *pgx.ConnPool
 	conn    *pgx.Conn
+}
+
+var defaultDelayFunction = func(errorCount int32) int {
+	return intPow(int(errorCount), 4) + 3
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -110,7 +118,13 @@ func (j *Job) Done() {
 // the pool.
 func (j *Job) Error(msg string) error {
 	errorCount := j.ErrorCount + 1
-	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
+
+	var delay int
+	if j.DelayFunction == nil {
+		delay = defaultDelayFunction(j.ErrorCount)
+	} else {
+		delay = j.DelayFunction(j.ErrorCount)
+	}
 
 	_, err := j.conn.Exec("que_set_error", errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
