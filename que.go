@@ -61,10 +61,6 @@ var defaultDelayFunction = func(errorCount int32) int {
 	return intPow(int(errorCount), 4) + 3
 }
 
-var defaultDelayFunction = func(errorCount int32) int {
-	return intPow(int(errorCount), 4) + 3
-}
-
 // Conn returns the pgx connection that this job is locked to. You may initiate
 // transactions on this connection or use it as you please until you call
 // Done(). At that point, this conn will be returned to the pool and it is
