@@ -3,12 +3,13 @@ package que
 import (
 	"testing"
 
-	"github.com/jackc/pgx"
+	"weavelab.xyz/pgx"
 )
 
 var testConnConfig = pgx.ConnConfig{
 	Host:     "localhost",
 	Database: "que-go-test",
+	User:     "postgres",
 }
 
 func openTestClientMaxConns(t testing.TB, maxConnections int) *Client {

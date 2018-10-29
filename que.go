@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx"
-	"github.com/jackc/pgx/pgtype"
+	"weavelab.xyz/pgx"
+	"weavelab.xyz/pgx/pgtype"
 )
 
 // Job is a single unit of work for Que to perform.

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/pgtype"
+	"weavelab.xyz/pgx/pgtype"
 )
 
 func TestEnqueueOnlyType(t *testing.T) {

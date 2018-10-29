@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/pgtype"
+	"weavelab.xyz/pgx/pgtype"
 )
 
 func init() {
