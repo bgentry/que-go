@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"weavelab.xyz/pgx"
-	"weavelab.xyz/pgx/pgtype"
+	"github.com/weave-lab/pgx"
+	"github.com/weave-lab/pgx/pgtype"
 )
 
 func TestLockJob(t *testing.T) {

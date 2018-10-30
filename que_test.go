@@ -3,7 +3,7 @@ package que
 import (
 	"testing"
 
-	"weavelab.xyz/pgx"
+	"github.com/weave-lab/pgx"
 )
 
 var testConnConfig = pgx.ConnConfig{

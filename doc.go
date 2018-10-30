@@ -12,7 +12,7 @@ Ruby and just add a few Go workers on a different queue name.
 PostgreSQL Driver pgx
 
 Instead of using database/sql and the more popular pq PostgreSQL driver, this
-package uses the pgx driver: https://weavelab.xyz/pgx
+package uses the pgx driver: https://github.com/weave-lab/pgx
 
 Because Que uses session-level advisory locks, we have to hold the same
 connection throughout the process of getting a job, working it, deleting it, and
