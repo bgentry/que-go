@@ -291,9 +291,27 @@ var preparedStatements = map[string]string{
 	"que_unlock_job":  sqlUnlockJob,
 }
 
+// PrepareStatements prepares the required statements to run que on the provided
+// *pgx.Conn. Typically it is used as an AfterConnect func for a
+// *pgx.ConnPool. Every connection used by que must have the statements prepared
+// ahead of time.
 func PrepareStatements(conn *pgx.Conn) error {
+	return PrepareStatementsWithPreparer(conn)
+}
+
+// Preparer defines the interface for types that support preparing
+// statements. This includes all of *pgx.ConnPool, *pgx.Conn, and *pgx.Tx
+type Preparer interface {
+	Prepare(name, sql string) (*pgx.PreparedStatement, error)
+}
+
+// PrepareStatementsWithPreparer prepares the required statements to run que on
+// the provided Preparer. This func can be used to prepare statements on a
+// *pgx.ConnPool after it is created, or on a *pg.Tx. Every connection used by
+// que must have the statements prepared ahead of time.
+func PrepareStatementsWithPreparer(p Preparer) error {
 	for name, sql := range preparedStatements {
-		if _, err := conn.Prepare(name, sql); err != nil {
+		if _, err := p.Prepare(name, sql); err != nil {
 			return err
 		}
 	}
