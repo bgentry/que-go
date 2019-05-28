@@ -30,6 +30,9 @@ type Worker struct {
 	// is usable and is the default for both que-go and the ruby que library.
 	Queue string
 
+	// ID is a unique id for this worker.
+	ID int
+
 	c *Client
 	m WorkMap
 
@@ -98,7 +101,7 @@ func (w *Worker) WorkOne() (didWork bool) {
 	defer recoverPanic(j)
 
 	didWork = true
-
+	j.WorkerID = w.ID
 	wf, ok := w.m[j.Type]
 	if !ok {
 		msg := fmt.Sprintf("unknown job type: %q", j.Type)
@@ -191,6 +194,7 @@ func (w *WorkerPool) Start() {
 		w.workers[i] = NewWorker(w.c, w.WorkMap)
 		w.workers[i].Interval = w.Interval
 		w.workers[i].Queue = w.Queue
+		w.workers[i].ID = int(i)
 		go w.workers[i].Work()
 	}
 }
