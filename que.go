@@ -42,6 +42,9 @@ type Job struct {
 	// failed. It is ignored on job creation.
 	LastError pgtype.Text
 
+	// WorkerID is the id of the worker working this job. It is ignored on creation.
+	WorkerID int
+
 	mu      sync.Mutex
 	deleted bool
 	pool    *pgx.ConnPool
