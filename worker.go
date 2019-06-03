@@ -102,6 +102,7 @@ func (w *Worker) WorkOne() (didWork bool) {
 
 	didWork = true
 	j.WorkerID = w.ID
+	j.Client = w.c
 	wf, ok := w.m[j.Type]
 	if !ok {
 		msg := fmt.Sprintf("unknown job type: %q", j.Type)
