@@ -45,6 +45,10 @@ type Job struct {
 	// WorkerID is the id of the worker working this job. It is ignored on creation.
 	WorkerID int
 
+	// Client is a reference to the Que Client which originated the request.
+	// This allows jobs to enqueue additional jobs as needed.
+	Client *Client
+
 	mu      sync.Mutex
 	deleted bool
 	pool    *pgx.ConnPool
