@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS que_jobs
   error_count integer     NOT NULL DEFAULT 0,
   last_error  text,
   queue       text        NOT NULL DEFAULT '',
+  shard_id    uuid        NULL,
 
   CONSTRAINT que_jobs_pkey PRIMARY KEY (queue, priority, run_at, job_id)
 );
