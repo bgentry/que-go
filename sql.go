@@ -86,9 +86,9 @@ AND   job_id    = $7::bigint
 
 	sqlInsertJob = `
 INSERT INTO que_jobs
-(queue, priority, run_at, job_class, args)
+(queue, priority, run_at, job_class, args, shard_id)
 VALUES
-(coalesce($1::text, ''::text), coalesce($2::smallint, 100::smallint), coalesce($3::timestamptz, now()::timestamptz), $4::text, coalesce($5::json, '[]'::json))
+(coalesce($1::text, ''::text), coalesce($2::smallint, 100::smallint), coalesce($3::timestamptz, now()::timestamptz), $4::text, coalesce($5::json, '[]'::json), $6::uuid)
 `
 
 	sqlDeleteJob = `

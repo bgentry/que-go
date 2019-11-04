@@ -198,7 +198,7 @@ func execEnqueue(j *Job, q queryable) error {
 		args.Status = pgtype.Present
 	}
 
-	_, err := q.Exec("que_insert_job", queue, priority, runAt, j.Type, args)
+	_, err := q.Exec("que_insert_job", queue, priority, runAt, j.Type, args, j.ShardID)
 	return err
 }
 
