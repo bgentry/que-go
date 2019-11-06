@@ -91,6 +91,16 @@ VALUES
 (coalesce($1::text, ''::text), coalesce($2::smallint, 100::smallint), coalesce($3::timestamptz, now()::timestamptz), $4::text, coalesce($5::json, '[]'::json), $6::uuid)
 `
 
+	sqlCondInsertJob = `
+INSERT INTO que_jobs
+(queue, priority, run_at, job_class, args, shard_id)
+VALUES
+(coalesce($1::text, ''::text), coalesce($2::smallint, 100::smallint), coalesce($3::timestamptz, now()::timestamptz), $4::text, coalesce($5::json, '[]'::json), $6::uuid)
+ON CONFLICT 
+($7)
+DO NOTHING
+`
+
 	sqlDeleteJob = `
 DELETE FROM que_jobs
 WHERE queue    = $1::text

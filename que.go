@@ -148,7 +148,13 @@ var ErrMissingType = errors.New("job type must be specified")
 
 // Enqueue adds a job to the queue.
 func (c *Client) Enqueue(j *Job) error {
-	return execEnqueue(j, c.pool)
+	return execEnqueue(j, c.pool, "que_insert_job")
+}
+
+// ConditionalEnqueue adds a job to the queue, and checks for conflicts on the params you set.
+// If there is any conflict, it does not enqueue.
+func (c *Client) ConditionalEnqueue(j *Job, cond string) error {
+	return execEnqueue(j, c.pool, "que_cond_insert_job", cond)
 }
 
 // EnqueueInTx adds a job to the queue within the scope of the transaction tx.
@@ -158,10 +164,10 @@ func (c *Client) Enqueue(j *Job) error {
 // It is the caller's responsibility to Commit or Rollback the transaction after
 // this function is called.
 func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
-	return execEnqueue(j, tx)
+	return execEnqueue(j, tx, "Que_insert_job")
 }
 
-func execEnqueue(j *Job, q queryable) error {
+func execEnqueue(j *Job, q queryable, sql string, extraArgs ...interface{}) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}
@@ -198,7 +204,10 @@ func execEnqueue(j *Job, q queryable) error {
 		args.Status = pgtype.Present
 	}
 
-	_, err := q.Exec("que_insert_job", queue, priority, runAt, j.Type, args, j.ShardID)
+	sqlArgs := []interface{}{queue, priority, runAt, j.Type, args, j.ShardID}
+	sqlArgs = append(sqlArgs, extraArgs...)
+
+	_, err := q.Exec(sql, sqlArgs...)
 	return err
 }
 
@@ -293,12 +302,13 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 }
 
 var preparedStatements = map[string]string{
-	"que_check_job":   sqlCheckJob,
-	"que_destroy_job": sqlDeleteJob,
-	"que_insert_job":  sqlInsertJob,
-	"que_lock_job":    sqlLockJob,
-	"que_set_error":   sqlSetError,
-	"que_unlock_job":  sqlUnlockJob,
+	"que_check_job":       sqlCheckJob,
+	"que_destroy_job":     sqlDeleteJob,
+	"que_insert_job":      sqlInsertJob,
+	"que_cond_insert_job": sqlCondInsertJob,
+	"que_lock_job":        sqlLockJob,
+	"que_set_error":       sqlSetError,
+	"que_unlock_job":      sqlUnlockJob,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
