@@ -165,7 +165,7 @@ func (c *Client) ConditionalEnqueue(j *Job, cond string) error {
 // It is the caller's responsibility to Commit or Rollback the transaction after
 // this function is called.
 func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
-	return execEnqueue(j, tx, "Que_insert_job")
+	return execEnqueue(j, tx, "que_insert_job")
 }
 
 func execEnqueue(j *Job, q queryable, sql string, extraArgs ...interface{}) error {
