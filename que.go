@@ -151,10 +151,10 @@ func (c *Client) Enqueue(j *Job) error {
 	return execEnqueue(j, c.pool, "que_insert_job")
 }
 
-// ConditionalEnqueue adds a job to the queue, and checks for conflicts on the condition.
+// EnqueueUnique adds a job to the queue, and checks for conflicts on the condition.
 // This condition must be included as a unique constraint on the queue table, so if you are using this,
 // you have extra plumbing to do.
-func (c *Client) ConditionalEnqueue(j *Job, cond string) error {
+func (c *Client) EnqueueUnique(j *Job, cond string) error {
 	return execEnqueue(j, c.pool, "que_cond_insert_job", cond)
 }
 

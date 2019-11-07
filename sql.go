@@ -92,8 +92,7 @@ VALUES
 `
 
 	sqlCondInsertJob = sqlInsertJob + `
-ON CONFLICT 
-($7)
+ON CONFLICT $7
 DO NOTHING
 `
 
