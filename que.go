@@ -132,30 +132,45 @@ func (j *Job) Error(msg string) error {
 // Client is a Que client that can add jobs to the queue and remove jobs from
 // the queue.
 type Client struct {
-	pool *pgx.ConnPool
+	pool    *pgx.ConnPool
+	inserts map[string]string
 
 	// TODO: add a way to specify default queueing options
 }
 
 // NewClient creates a new Client that uses the pgx pool.
 func NewClient(pool *pgx.ConnPool) *Client {
-	return &Client{pool: pool}
+	// prepare custom sql if exists
+	return &Client{pool, make(map[string]string)}
 }
 
 // ErrMissingType is returned when you attempt to enqueue a job with no Type
 // specified.
 var ErrMissingType = errors.New("job type must be specified")
+var ErrNoCustomEnqueue = errors.New("no custom sql enqueue was found")
+
+func (c *Client) AddCustomEnqueues(enq map[string]string) error {
+	for name, sql := range enq {
+		if _, err := c.pool.Prepare(name, sql); err != nil {
+			return err
+		}
+		c.inserts[name] = sql
+	}
+	return nil
+}
+
+// EnqueueCustom allows you to use a custom sql insert specified at queue creation time
+func (c *Client) EnqueueCustom(j *Job, sql string) error {
+	if _, ok := c.inserts[sql]; !ok {
+		return ErrNoCustomEnqueue
+	}
+
+	return execEnqueue(j, c.pool, sql)
+}
 
 // Enqueue adds a job to the queue.
 func (c *Client) Enqueue(j *Job) error {
 	return execEnqueue(j, c.pool, "que_insert_job")
-}
-
-// EnqueueUnique adds a job to the queue, and checks for conflicts on the condition.
-// This condition must be included as a unique constraint on the queue table, so if you are using this,
-// you have extra plumbing to do.
-func (c *Client) EnqueueUnique(j *Job, cond string) error {
-	return execEnqueue(j, c.pool, "que_cond_insert_job", cond)
 }
 
 // EnqueueInTx adds a job to the queue within the scope of the transaction tx.
@@ -168,7 +183,7 @@ func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
 	return execEnqueue(j, tx, "que_insert_job")
 }
 
-func execEnqueue(j *Job, q queryable, sql string, extraArgs ...interface{}) error {
+func execEnqueue(j *Job, q queryable, sql string) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}
@@ -205,10 +220,7 @@ func execEnqueue(j *Job, q queryable, sql string, extraArgs ...interface{}) erro
 		args.Status = pgtype.Present
 	}
 
-	sqlArgs := []interface{}{queue, priority, runAt, j.Type, args, j.ShardID}
-	sqlArgs = append(sqlArgs, extraArgs...)
-
-	_, err := q.Exec(sql, sqlArgs...)
+	_, err := q.Exec(sql, queue, priority, runAt, j.Type, args, j.ShardID)
 	return err
 }
 
@@ -303,13 +315,12 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 }
 
 var preparedStatements = map[string]string{
-	"que_check_job":       sqlCheckJob,
-	"que_destroy_job":     sqlDeleteJob,
-	"que_insert_job":      sqlInsertJob,
-	"que_cond_insert_job": sqlCondInsertJob,
-	"que_lock_job":        sqlLockJob,
-	"que_set_error":       sqlSetError,
-	"que_unlock_job":      sqlUnlockJob,
+	"que_check_job":   sqlCheckJob,
+	"que_destroy_job": sqlDeleteJob,
+	"que_insert_job":  sqlInsertJob,
+	"que_lock_job":    sqlLockJob,
+	"que_set_error":   sqlSetError,
+	"que_unlock_job":  sqlUnlockJob,
 }
 
 func PrepareStatements(conn *pgx.Conn) error {
