@@ -174,6 +174,15 @@ func (c *Client) Enqueue(j *Job) error {
 	return execEnqueue(j, c.pool, "que_insert_job")
 }
 
+func (c *Client) BulkCustomEnqueue(jobs []*Job, sql string) error {
+	if _, ok := c.inserts[sql]; !ok {
+		return ErrNoCustomEnqueue
+	}
+
+	batch := c.pool.BeginBatch()
+	return bulkEnqueue(jobs, batch, sql)
+}
+
 func (c *Client) BulkEnqueue(jobs []*Job) error {
 	batch := c.pool.BeginBatch()
 	return bulkEnqueue(jobs, batch, "que_insert_job")
