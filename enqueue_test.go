@@ -173,7 +173,7 @@ func TestBulkEnqueue(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	kinds := []string {
+	kinds := []string{
 		"Foo",
 		"Bar",
 		"Baz",

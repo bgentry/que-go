@@ -190,12 +190,12 @@ func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
 }
 
 type PreparedJob struct {
-	Type string
-	Queue *pgtype.Text
+	Type     string
+	Queue    *pgtype.Text
 	Priority *pgtype.Int2
-	RunAt *pgtype.Timestamptz
-	Args *pgtype.Bytea
-	ShardID null.UUID
+	RunAt    *pgtype.Timestamptz
+	Args     *pgtype.Bytea
+	ShardID  null.UUID
 }
 
 func prepareJob(j *Job) (*PreparedJob, error) {
