@@ -91,7 +91,7 @@ func TestEnqueueWithArgs(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(c.pool)
 
-	want := `{"arg1":0, "arg2":"a string"}`
+	want := `{"arg1": 0, "arg2": "a string"}`
 	if err := c.Enqueue(&Job{Type: "MyJob", Args: []byte(want)}); err != nil {
 		t.Fatal(err)
 	}
@@ -166,5 +166,45 @@ func TestEnqueueInTx(t *testing.T) {
 	}
 	if j != nil {
 		t.Fatalf("wanted job to be rolled back, got %+v", j)
+	}
+}
+
+func TestBulkEnqueue(t *testing.T) {
+	c := openTestClient(t)
+	defer truncateAndClose(c.pool)
+
+	kinds := []string {
+		"Foo",
+		"Bar",
+		"Baz",
+	}
+
+	jobs := []*Job{}
+	for _, kind := range kinds {
+		jobs = append(jobs, &Job{Type: kind})
+	}
+
+	err := c.BulkEnqueue(jobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := c.pool.Query("SELECT job_class FROM que_jobs WHERE job_class = ANY($1)", kinds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	results := []string{}
+	for rows.Next() {
+		var result string
+		rows.Scan(&result)
+		results = append(results, result)
+	}
+
+	wantCount := len(jobs)
+	resultCount := len(results)
+	if resultCount != wantCount {
+		t.Fatalf("want %d, got %d", wantCount, resultCount)
 	}
 }
