@@ -1,6 +1,7 @@
 package que
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -173,6 +174,20 @@ func (c *Client) Enqueue(j *Job) error {
 	return execEnqueue(j, c.pool, "que_insert_job")
 }
 
+func (c *Client) BulkCustomEnqueue(jobs []*Job, sql string) error {
+	if _, ok := c.inserts[sql]; !ok {
+		return ErrNoCustomEnqueue
+	}
+
+	batch := c.pool.BeginBatch()
+	return bulkEnqueue(jobs, batch, sql)
+}
+
+func (c *Client) BulkEnqueue(jobs []*Job) error {
+	batch := c.pool.BeginBatch()
+	return bulkEnqueue(jobs, batch, "que_insert_job")
+}
+
 // EnqueueInTx adds a job to the queue within the scope of the transaction tx.
 // This allows you to guarantee that an enqueued job will either be committed or
 // rolled back atomically with other changes in the course of this transaction.
@@ -183,45 +198,83 @@ func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
 	return execEnqueue(j, tx, "que_insert_job")
 }
 
-func execEnqueue(j *Job, q queryable, sql string) error {
-	if j.Type == "" {
-		return ErrMissingType
-	}
+type PreparedJob struct {
+	Type     string
+	Queue    *pgtype.Text
+	Priority *pgtype.Int2
+	RunAt    *pgtype.Timestamptz
+	Args     *pgtype.Bytea
+	ShardID  null.UUID
+}
 
-	queue := &pgtype.Text{
+func prepareJob(j *Job) (*PreparedJob, error) {
+	prepped := &PreparedJob{}
+	if j.Type == "" {
+		return prepped, ErrMissingType
+	}
+	prepped.Type = j.Type
+
+	prepped.Queue = &pgtype.Text{
 		String: j.Queue,
 		Status: pgtype.Null,
 	}
 	if j.Queue != "" {
-		queue.Status = pgtype.Present
+		prepped.Queue.Status = pgtype.Present
 	}
 
-	priority := &pgtype.Int2{
+	prepped.Priority = &pgtype.Int2{
 		Int:    j.Priority,
 		Status: pgtype.Null,
 	}
 	if j.Priority != 0 {
-		priority.Status = pgtype.Present
+		prepped.Priority.Status = pgtype.Present
 	}
 
-	runAt := &pgtype.Timestamptz{
+	prepped.RunAt = &pgtype.Timestamptz{
 		Time:   j.RunAt,
 		Status: pgtype.Null,
 	}
 	if !j.RunAt.IsZero() {
-		runAt.Status = pgtype.Present
+		prepped.RunAt.Status = pgtype.Present
 	}
 
-	args := &pgtype.Bytea{
+	prepped.Args = &pgtype.Bytea{
 		Bytes:  j.Args,
 		Status: pgtype.Null,
 	}
 	if len(j.Args) != 0 {
-		args.Status = pgtype.Present
+		prepped.Args.Status = pgtype.Present
 	}
 
-	_, err := q.Exec(sql, queue, priority, runAt, j.Type, args, j.ShardID)
+	prepped.ShardID = j.ShardID
+
+	return prepped, nil
+}
+
+func execEnqueue(j *Job, q queryable, sql string) error {
+	prepped, err := prepareJob(j)
+	if err != nil {
+		return err
+	}
+
+	_, err = q.Exec(sql, prepped.Queue, prepped.Priority, prepped.RunAt, prepped.Type, prepped.Args, prepped.ShardID)
 	return err
+}
+
+func bulkEnqueue(jobs []*Job, batch *pgx.Batch, sql string) error {
+	for _, job := range jobs {
+		prepped, err := prepareJob(job)
+		if err != nil {
+			return err
+		}
+		batch.Queue(sql,
+			[]interface{}{prepped.Queue, prepped.Priority, prepped.RunAt, prepped.Type, prepped.Args, prepped.ShardID},
+			[]pgtype.OID{},
+			[]int16{},
+		)
+	}
+
+	return batch.Send(context.Background(), nil)
 }
 
 type queryable interface {
