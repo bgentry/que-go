@@ -179,13 +179,11 @@ func (c *Client) BulkCustomEnqueue(jobs []*Job, sql string) error {
 		return ErrNoCustomEnqueue
 	}
 
-	batch := c.pool.BeginBatch()
-	return bulkEnqueue(jobs, batch, sql)
+	return bulkEnqueue(jobs, c.pool, sql)
 }
 
 func (c *Client) BulkEnqueue(jobs []*Job) error {
-	batch := c.pool.BeginBatch()
-	return bulkEnqueue(jobs, batch, "que_insert_job")
+	return bulkEnqueue(jobs, c.pool, "que_insert_job")
 }
 
 // EnqueueInTx adds a job to the queue within the scope of the transaction tx.
@@ -261,20 +259,38 @@ func execEnqueue(j *Job, q queryable, sql string) error {
 	return err
 }
 
-func bulkEnqueue(jobs []*Job, batch *pgx.Batch, sql string) error {
-	for _, job := range jobs {
-		prepped, err := prepareJob(job)
+const maxBatch = 5000 // Force a maximum batch volume to deal with high volume database deadlocks
+func bulkEnqueue(jobs []*Job, connectionPool *pgx.ConnPool, sql string) error {
+	ctx := context.Background()
+	batches := makeBatches(jobs, maxBatch)
+	for _, batchJobs := range batches {
+		batch := connectionPool.BeginBatch()
+		for _, job := range batchJobs {
+			prepped, err := prepareJob(job)
+			if err != nil {
+				return err
+			}
+			batch.Queue(sql,
+				[]interface{}{prepped.Queue, prepped.Priority, prepped.RunAt, prepped.Type, prepped.Args, prepped.ShardID},
+				[]pgtype.OID{},
+				[]int16{},
+			)
+		}
+		err := batch.Send(ctx, nil)
 		if err != nil {
 			return err
 		}
-		batch.Queue(sql,
-			[]interface{}{prepped.Queue, prepped.Priority, prepped.RunAt, prepped.Type, prepped.Args, prepped.ShardID},
-			[]pgtype.OID{},
-			[]int16{},
-		)
 	}
+	return nil
+}
 
-	return batch.Send(context.Background(), nil)
+func makeBatches(jobs []*Job, batchSize int) [][]*Job {
+	batches := make([][]*Job, 0, (len(jobs)+batchSize-1)/batchSize)
+	for batchSize < len(jobs) {
+		jobs, batches = jobs[batchSize:], append(batches, jobs[0:batchSize:batchSize])
+	}
+	batches = append(batches, jobs)
+	return batches
 }
 
 type queryable interface {

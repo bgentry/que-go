@@ -1,6 +1,7 @@
 package que
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -205,6 +206,30 @@ func TestBulkEnqueue(t *testing.T) {
 	wantCount := len(jobs)
 	resultCount := len(results)
 	if resultCount != wantCount {
-		t.Fatalf("want %d, got %d", wantCount, resultCount)
+		t.Errorf("want %d, got %d", wantCount, resultCount)
+	}
+}
+
+func TestMakeBatches(t *testing.T) {
+	batchSize := 3
+
+	kinds := []string{
+		"Foo",
+		"Bar",
+		"Baz",
+		"Fizz",
+		"Buzz",
+	}
+
+	jobs := []*Job{}
+	for _, kind := range kinds {
+		jobs = append(jobs, &Job{Type: kind})
+	}
+
+	batches := makeBatches(jobs, batchSize)
+	want := int(math.Ceil(float64(len(kinds)) / float64(batchSize)))
+	got := len(batches)
+	if got != want {
+		t.Errorf("want %d batches, got %d", want, got)
 	}
 }
