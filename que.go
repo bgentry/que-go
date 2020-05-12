@@ -9,6 +9,7 @@ import (
 	"github.com/weave-lab/pgx"
 	"github.com/weave-lab/pgx/pgtype"
 	"weavelab.xyz/monorail/shared/go-utilities/null"
+	"weavelab.xyz/monorail/shared/wlib/uuid"
 )
 
 // Job is a single unit of work for Que to perform.
@@ -332,6 +333,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 	j := Job{pool: c.pool, conn: conn}
 
 	for i := 0; i < maxLockJobAttempts; i++ {
+		var id uuid.UUID
 		err = conn.QueryRow("que_lock_job", queue).Scan(
 			&j.Queue,
 			&j.Priority,
@@ -340,7 +342,12 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			&j.Type,
 			&j.Args,
 			&j.ErrorCount,
+			&id,
+			&j.LastError,
 		)
+
+		j.ShardID = null.NewUUIDUUIDDefaultAsNull(id)
+
 		if err != nil {
 			c.pool.Release(conn)
 			if err == pgx.ErrNoRows {
