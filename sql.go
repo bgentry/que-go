@@ -54,7 +54,7 @@ WITH RECURSIVE jobs AS (
     ) AS t1
   )
 )
-SELECT queue, priority, run_at, job_id, job_class, args, error_count
+SELECT queue, priority, run_at, job_id, job_class, args, error_count, shard_id, last_error
 FROM jobs
 WHERE locked
 LIMIT 1

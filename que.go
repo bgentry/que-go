@@ -340,7 +340,10 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			&j.Type,
 			&j.Args,
 			&j.ErrorCount,
+			&j.ShardID,
+			&j.LastError,
 		)
+
 		if err != nil {
 			c.pool.Release(conn)
 			if err == pgx.ErrNoRows {
