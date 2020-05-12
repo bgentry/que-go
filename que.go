@@ -340,7 +340,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			&j.Type,
 			&j.Args,
 			&j.ErrorCount,
-			&j.ShardID.UUID,
+			&j.ShardID,
 			&j.LastError,
 		)
 
