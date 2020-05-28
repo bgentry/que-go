@@ -70,16 +70,24 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 // Work pulls jobs off the Worker's Queue at its Interval. This function only
 // returns after Shutdown() is called, so it should be run in its own goroutine.
 func (w *Worker) Work() {
+	defer log.Println("worker done")
 	for {
-		select {
-		case <-w.ch:
-			log.Println("worker done")
-			return
-		case <-time.After(w.Interval):
-			for {
-				if didWork := w.WorkOne(); !didWork {
-					break // didn't do any work, go back to sleep
-				}
+		// Try to work a job
+		if w.WorkOne() {
+			// Since we just did work, non-blocking check whether we should exit
+			select {
+			case <-w.ch:
+				return
+			default:
+				// continue in loop
+			}
+		} else {
+			// No work found, block until exit or timer expires
+			select {
+			case <-w.ch:
+				return
+			case <-time.After(w.Interval):
+				// continue in loop
 			}
 		}
 	}
@@ -209,7 +217,11 @@ func (w *WorkerPool) Shutdown() {
 
 	for _, worker := range w.workers {
 		go func(worker *Worker) {
-			worker.Shutdown()
+			// If Shutdown is called before Start has been called,
+			// then these are nil, so don't try to close them
+			if worker != nil {
+				worker.Shutdown()
+			}
 			wg.Done()
 		}(worker)
 	}
