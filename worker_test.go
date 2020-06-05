@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/pgtype"
+	"github.com/jackc/pgtype"
 )
 
 func init() {
