@@ -239,6 +239,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			&j.Type,
 			&j.Args,
 			&j.ErrorCount,
+			&j.LastError,
 		)
 		if err != nil {
 			c.pool.Release(conn)
