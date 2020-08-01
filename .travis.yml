@@ -1,0 +1,18 @@
+sudo: false
+language: go
+
+go:
+  - 1.14.x
+  - tip
+
+matrix:
+  allow_failures:
+    - go: tip
+
+services:
+  - postgresql
+
+before_script:
+  - psql -c 'create database que-go-test;' -U postgres
+  - psql -U postgres -a -q -f schema.sql
+  - go get -t -v ./...
