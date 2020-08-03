@@ -1,6 +1,6 @@
 # que-go
 
-[![GoDoc](https://godoc.org/github.com/bgentry/que-go?status.svg)][godoc]
+[![GoDoc](https://godoc.org/github.com/bgentry/que-go?status.svg)][godoc] [![Build Status](https://travis-ci.org/gadelkareem/que-go.svg?branch=master)](https://travis-ci.org/gadelkareem/que-go)
 
 Que-go is a fully interoperable Golang port of [Chris Hanks][chanks]' [Ruby Que
 queuing library][ruby-que] for PostgreSQL. Que uses PostgreSQL's advisory locks
