@@ -21,6 +21,10 @@ func openTestClientMaxConns(t testing.TB, maxConnections int32) *Client {
     if err != nil {
         t.Fatal(err)
     }
+    if _, err := pool.Exec(context.Background(), "TRUNCATE TABLE que_jobs"); err != nil {
+        panic(err)
+    }
+
     return NewClient(pool)
 }
 
@@ -28,10 +32,7 @@ func openTestClient(t testing.TB) *Client {
     return openTestClientMaxConns(t, 5)
 }
 
-func truncateAndClose(pool *pgxpool.Pool) {
-    if _, err := pool.Exec(context.Background(), "TRUNCATE TABLE que_jobs"); err != nil {
-        panic(err)
-    }
+func closePool(pool *pgxpool.Pool) {
     pool.Close()
 }
 

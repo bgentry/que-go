@@ -230,7 +230,6 @@ func (c *Client) LockJob(queue string) (*Job, error) {
     if err != nil {
         return nil, err
     }
-
     j := Job{pool: c.pool, conn: conn}
 
     for i := 0; i < maxLockJobAttempts; i++ {
@@ -244,13 +243,12 @@ func (c *Client) LockJob(queue string) (*Job, error) {
             &j.ErrorCount,
         )
         if err != nil {
-            c.pool.Close()
+            j.conn.Release()
             if err == pgx.ErrNoRows {
                 return nil, nil
             }
             return nil, err
         }
-
         // Deal with race condition. Explanation from the Ruby Que gem:
         //
         // Edge case: It's possible for the lock_job query to have
@@ -264,7 +262,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
         // I'm not sure how to reliably commit a transaction that deletes
         // the job in a separate thread between lock_job and check_job.
         var ok bool
-        err = conn.QueryRow(context.Background(),"que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
+        err = conn.QueryRow(context.Background(), "que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
         if err == nil {
             return &j, nil
         } else if err == pgx.ErrNoRows {
@@ -274,14 +272,14 @@ func (c *Client) LockJob(queue string) (*Job, error) {
             // eventually causing the server to run out of locks.
             //
             // Also swallow the possible error, exactly like in Done.
-            _ = conn.QueryRow(context.Background(),"que_unlock_job", j.ID).Scan(&ok)
+            _ = conn.QueryRow(context.Background(), "que_unlock_job", j.ID).Scan(&ok)
             continue
         } else {
-            c.pool.Close()
+            j.conn.Release()
             return nil, err
         }
     }
-    c.pool.Close()
+    j.conn.Release()
     return nil, ErrAgain
 }
 

@@ -18,7 +18,7 @@ func init() {
 
 func TestWorkerWorkOne(t *testing.T) {
     c := openTestClient(t)
-    defer truncateAndClose(c.pool)
+    defer closePool(c.pool)
 
     success := false
     wm := WorkMap{
@@ -49,7 +49,7 @@ func TestWorkerWorkOne(t *testing.T) {
 
 func TestWorkerShutdown(t *testing.T) {
     c := openTestClient(t)
-    defer truncateAndClose(c.pool)
+    defer closePool(c.pool)
 
     w := NewWorker(c, WorkMap{})
     finished := false
@@ -72,7 +72,7 @@ func BenchmarkWorker(b *testing.B) {
     defer func() {
         log.SetOutput(os.Stdout)
     }()
-    defer truncateAndClose(c.pool)
+    defer closePool(c.pool)
 
     w := NewWorker(c, WorkMap{"Nil": nilWorker})
 
@@ -94,7 +94,7 @@ func nilWorker(j *Job) error {
 
 func TestWorkerWorkReturnsError(t *testing.T) {
     c := openTestClient(t)
-    defer truncateAndClose(c.pool)
+    defer closePool(c.pool)
 
     called := 0
     wm := WorkMap{
@@ -145,7 +145,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 
 func TestWorkerWorkRescuesPanic(t *testing.T) {
     c := openTestClient(t)
-    defer truncateAndClose(c.pool)
+    defer closePool(c.pool)
 
     called := 0
     wm := WorkMap{
@@ -196,7 +196,7 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 
 func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
     c := openTestClient(t)
-    defer truncateAndClose(c.pool)
+    defer closePool(c.pool)
 
     currentConns := c.pool.Stat().TotalConns()
     availConns := c.pool.Stat().AcquiredConns()
