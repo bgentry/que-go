@@ -13,6 +13,6 @@ services:
   - postgresql
 
 before_script:
-  - psql -c 'create database que-go-test;' -U postgres
+  - psql -c 'create database que_go_test;' -U postgres
   - psql -U postgres -a -q -f schema.sql
   - go get -t -v ./...

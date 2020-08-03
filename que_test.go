@@ -8,7 +8,7 @@ import (
     "github.com/jackc/pgx/v4/pgxpool"
 )
 
-var testConnConfig, _ = pgx.ParseConfig("postgres://postgres:postgres@localhost/que-go-test")
+var testConnConfig, _ = pgx.ParseConfig("postgres://postgres:postgres@localhost/que_go_test")
 
 func openTestClientMaxConns(t testing.TB, maxConnections int32) *Client {
     connPoolConfig, err := pgxpool.ParseConfig(testConnConfig.ConnString())
