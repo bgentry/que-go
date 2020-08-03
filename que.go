@@ -8,8 +8,8 @@ import (
 
     "github.com/jackc/pgconn"
     "github.com/jackc/pgtype"
-    "github.com/jackc/pgx/v4/pgxpool"
     "github.com/jackc/pgx/v4"
+    "github.com/jackc/pgx/v4/pgxpool"
 )
 
 // Job is a single unit of work for Que to perform.
@@ -100,7 +100,7 @@ func (j *Job) Done() {
     // stop.
     _ = j.conn.QueryRow(context.Background(), "que_unlock_job", j.ID).Scan(&ok)
 
-    j.pool.Close()
+    j.conn.Release()
     j.pool = nil
     j.conn = nil
 }
