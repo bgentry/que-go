@@ -27,7 +27,7 @@ type Worker struct {
 	Interval time.Duration
 
 	// Queue is the name of the queue to pull Jobs off of. The default value, "",
-	// is usable and is the default for both que-go and the ruby que library.
+	// is usable and is the default for both que and the ruby que library.
 	Queue string
 
 	c *Client

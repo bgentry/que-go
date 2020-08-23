@@ -1,10 +1,10 @@
 /*
-Package que-go is a fully interoperable Golang port of Chris Hanks' Ruby Que
+Package que is a fully interoperable Golang port of Chris Hanks' Ruby Que
 queueing library for PostgreSQL. Que uses PostgreSQL's advisory locks
 for speed and reliability. See the original Que documentation for more details:
 https://github.com/chanks/que
 
-Because que-go is an interoperable port of Que, you can enqueue jobs in Ruby
+Because que is an interoperable port of Que, you can enqueue jobs in Ruby
 (i.e. from a Rails app) and write your workers in Go. Or if you have a limited
 set of jobs that you want to write in Go, you can leave most of your workers in
 Ruby and just add a few Go workers on a different queue name.
@@ -25,7 +25,7 @@ than pq due largely to its use of binary encoding.
 
 Prepared Statements
 
-que-go relies on prepared statements for performance. As of now these have to
+que relies on prepared statements for performance. As of now these have to
 be initialized manually on your connection pool like so:
 
     pgxpool, err := pgx.NewConnPool(pgx.ConnPoolConfig{
