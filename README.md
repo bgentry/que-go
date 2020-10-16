@@ -1,12 +1,12 @@
-# que
+# que-go
 
-[![GoDoc](https://godoc.org/github.com/bgentry/que?status.svg)][godoc] [![Build Status](https://travis-ci.org/gadelkareem/que.svg?branch=master)](https://travis-ci.org/gadelkareem/que)
+[![GoDoc](https://godoc.org/github.com/bgentry/que-go?status.svg)][godoc]
 
-que is a fully interoperable Golang port of [Chris Hanks][chanks]' [Ruby Que
+Que-go is a fully interoperable Golang port of [Chris Hanks][chanks]' [Ruby Que
 queuing library][ruby-que] for PostgreSQL. Que uses PostgreSQL's advisory locks
 for speed and reliability.
 
-Because que is an interoperable port of Que, you can enqueue jobs in Ruby
+Because que-go is an interoperable port of Que, you can enqueue jobs in Ruby
 (i.e. from a Rails app) and write your workers in Go. Or if you have a limited
 set of jobs that you want to write in Go, you can leave most of your workers in
 Ruby and just add a few Go workers on a different queue name. Or you can just
@@ -26,7 +26,7 @@ than pq due largely to its use of binary encoding.
 
 Please see the [godocs][godoc] for more info and examples.
 
-[godoc]: https://godoc.org/github.com/bgentry/que
+[godoc]: https://godoc.org/github.com/bgentry/que-go
 [chanks]: https://github.com/chanks
 [ruby-que]: https://github.com/chanks/que
 [pgx]: https://github.com/jackc/pgx

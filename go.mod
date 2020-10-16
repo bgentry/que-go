@@ -1,4 +1,4 @@
-module github.com/gadelkareem/que
+module github.com/bgentry/que-go
 
 go 1.14
 
