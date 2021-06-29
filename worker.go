@@ -2,6 +2,7 @@ package que
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -36,6 +37,17 @@ type Worker struct {
 	mu   sync.Mutex
 	done bool
 	ch   chan struct{}
+}
+
+// ErrorRunAt is an type you to specify when exactly
+// a job should run again after there is an error
+type ErrorRunAt struct {
+	Err   error
+	RunAt time.Time
+}
+
+func (e *ErrorRunAt) Error() string {
+	return e.Err.Error()
 }
 
 var defaultWakeInterval = 5 * time.Second
@@ -118,7 +130,13 @@ func (w *Worker) WorkOne() (didWork bool) {
 	}
 
 	if err = wf(j); err != nil {
-		j.Error(err.Error())
+		var errRunAt *ErrorRunAt
+		if errors.As(err, &errRunAt) {
+			j.ErrorRunAt(errRunAt.Error(), errRunAt.RunAt)
+		} else {
+			j.Error(err.Error())
+		}
+
 		return
 	}
 
