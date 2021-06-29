@@ -116,13 +116,13 @@ func (j *Job) ErrorRunAt(msg string, runAt time.Time) error {
 	errorCount := j.ErrorCount + 1
 	delay := intPow(int(errorCount), 4) + 3
 
-	if !runAt.IsZero() {
-		j.RunAt = runAt
-	} else {
+	if runAt.IsZero() {
 		j.RunAt = time.Now().Add(time.Duration(delay) * time.Second)
+	} else {
+		j.RunAt = runAt
 	}
 
-	_, err := j.conn.Exec("que_set_error", errorCount, runAt, msg, j.Queue, j.Priority, j.ID)
+	_, err := j.conn.Exec("que_set_error", errorCount, j.RunAt, msg, j.Queue, j.Priority, j.ID)
 	if err != nil {
 		return err
 	}
