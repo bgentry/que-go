@@ -76,12 +76,11 @@ AND    job_id   = $4::bigint
 	sqlSetError = `
 UPDATE que_jobs
 SET error_count = $1::integer,
-    run_at      = now() + $2::bigint * '1 second'::interval,
+    run_at      = $2::timestamptz,
     last_error  = $3::text
 WHERE queue     = $4::text
 AND   priority  = $5::smallint
-AND   run_at    = $6::timestamptz
-AND   job_id    = $7::bigint
+AND   job_id    = $6::bigint
 `
 
 	sqlInsertJob = `

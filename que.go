@@ -109,10 +109,20 @@ func (j *Job) Done() {
 // You must also later call Done() to return this job's database connection to
 // the pool.
 func (j *Job) Error(msg string) error {
-	errorCount := j.ErrorCount + 1
-	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
+	return j.ErrorRunAt(msg, time.Time{})
+}
 
-	_, err := j.conn.Exec("que_set_error", errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
+func (j *Job) ErrorRunAt(msg string, runAt time.Time) error {
+	errorCount := j.ErrorCount + 1
+	delay := intPow(int(errorCount), 4) + 3
+
+	if runAt.IsZero() {
+		j.RunAt = time.Now().Add(time.Duration(delay) * time.Second)
+	} else {
+		j.RunAt = runAt
+	}
+
+	_, err := j.conn.Exec("que_set_error", errorCount, j.RunAt, msg, j.Queue, j.Priority, j.ID)
 	if err != nil {
 		return err
 	}
