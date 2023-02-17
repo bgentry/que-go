@@ -117,7 +117,8 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if err = j.Delete(); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
+	// This is not the ERROR-level log, but rather just INFO-level. We just disable it, because it's too noisy.
+	//log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
 	return
 }
 
