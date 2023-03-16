@@ -1,21 +1,20 @@
 package que
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/pgtype"
 )
 
 func TestEnqueueOnlyType(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
-	if err := c.Enqueue(&Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.pool)
+	j, err := findOneJob(context.Background(), c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,21 +41,21 @@ func TestEnqueueOnlyType(t *testing.T) {
 	if want := int32(0); j.ErrorCount != want {
 		t.Errorf("want ErrorCount=%d, got %d", want, j.ErrorCount)
 	}
-	if j.LastError.Status == pgtype.Present {
+	if j.LastError.Valid {
 		t.Errorf("want no LastError, got %v", j.LastError)
 	}
 }
 
 func TestEnqueueWithPriority(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	want := int16(99)
-	if err := c.Enqueue(&Job{Type: "MyJob", Priority: want}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob", Priority: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.pool)
+	j, err := findOneJob(context.Background(), c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,14 +67,14 @@ func TestEnqueueWithPriority(t *testing.T) {
 
 func TestEnqueueWithRunAt(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	want := time.Now().Add(2 * time.Minute)
-	if err := c.Enqueue(&Job{Type: "MyJob", RunAt: want}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob", RunAt: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.pool)
+	j, err := findOneJob(context.Background(), c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,14 +88,14 @@ func TestEnqueueWithRunAt(t *testing.T) {
 
 func TestEnqueueWithArgs(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	want := `{"arg1":0, "arg2":"a string"}`
-	if err := c.Enqueue(&Job{Type: "MyJob", Args: []byte(want)}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob", Args: []byte(want)}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.pool)
+	j, err := findOneJob(context.Background(), c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,14 +107,14 @@ func TestEnqueueWithArgs(t *testing.T) {
 
 func TestEnqueueWithQueue(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	want := "special-work-queue"
-	if err := c.Enqueue(&Job{Type: "MyJob", Queue: want}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob", Queue: want}); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(c.pool)
+	j, err := findOneJob(context.Background(), c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,28 +126,28 @@ func TestEnqueueWithQueue(t *testing.T) {
 
 func TestEnqueueWithEmptyType(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
-	if err := c.Enqueue(&Job{Type: ""}); err != ErrMissingType {
+	if err := c.Enqueue(context.Background(), &Job{Type: ""}); err != ErrMissingType {
 		t.Fatalf("want ErrMissingType, got %v", err)
 	}
 }
 
 func TestEnqueueInTx(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
-	tx, err := c.pool.Begin()
+	tx, err := c.pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(context.Background())
 
-	if err = c.EnqueueInTx(&Job{Type: "MyJob"}, tx); err != nil {
+	if err = c.EnqueueInTx(context.Background(), &Job{Type: "MyJob"}, tx); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err := findOneJob(tx)
+	j, err := findOneJob(context.Background(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,11 +155,11 @@ func TestEnqueueInTx(t *testing.T) {
 		t.Fatal("want job, got none")
 	}
 
-	if err = tx.Rollback(); err != nil {
+	if err = tx.Rollback(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	j, err = findOneJob(c.pool)
+	j, err = findOneJob(context.Background(), c.pool)
 	if err != nil {
 		t.Fatal(err)
 	}
