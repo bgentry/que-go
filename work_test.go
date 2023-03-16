@@ -229,11 +229,9 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 
 	// helper functions
 	newPool := func() *pgxpool.Pool {
-		connPoolConfig := pgxpool.Config{
-			ConnConfig:   testConnConfig,
-			AfterConnect: PrepareStatements,
-		}
-		conn, err := pgxpool.NewWithConfig(context.Background(), &connPoolConfig)
+		connPoolConfig := testConnConfig()
+		connPoolConfig.AfterConnect = PrepareStatements
+		conn, err := pgxpool.NewWithConfig(context.Background(), connPoolConfig)
 		if err != nil {
 			panic(err)
 		}

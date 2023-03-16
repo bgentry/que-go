@@ -1,15 +1,13 @@
 package que
 
 import (
-	context2 "context"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/jackc/pgx/pgtype"
 )
 
 func init() {
@@ -18,7 +16,7 @@ func init() {
 
 func TestWorkerWorkOne(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(context2.Background(), c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	success := false
 	wm := WorkMap{
@@ -34,7 +32,7 @@ func TestWorkerWorkOne(t *testing.T) {
 		t.Errorf("want didWork=false when no job was queued")
 	}
 
-	if err := c.Enqueue(context2.Background(), &Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +47,7 @@ func TestWorkerWorkOne(t *testing.T) {
 
 func TestWorkerShutdown(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(context2.Background(), c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	w := NewWorker(c, WorkMap{})
 	finished := false
@@ -72,12 +70,12 @@ func BenchmarkWorker(b *testing.B) {
 	defer func() {
 		log.SetOutput(os.Stdout)
 	}()
-	defer truncateAndClose(context2.Background(), c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	w := NewWorker(c, WorkMap{"Nil": nilWorker})
 
 	for i := 0; i < b.N; i++ {
-		if err := c.Enqueue(context2.Background(), &Job{Type: "Nil"}); err != nil {
+		if err := c.Enqueue(context.Background(), &Job{Type: "Nil"}); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -94,7 +92,7 @@ func nilWorker(j *Job) error {
 
 func TestWorkerWorkReturnsError(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(context2.Background(), c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	called := 0
 	wm := WorkMap{
@@ -110,7 +108,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 		t.Errorf("want didWork=false when no job was queued")
 	}
 
-	if err := c.Enqueue(context2.Background(), &Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,20 +120,20 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 		t.Errorf("want called=1 was: %d", called)
 	}
 
-	tx, err := c.pool.Begin()
+	tx, err := c.pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(context.Background())
 
-	j, err := findOneJob(context2.Background(), tx)
+	j, err := findOneJob(context.Background(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if j.ErrorCount != 1 {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
-	if j.LastError.Status == pgtype.Null {
+	if !j.LastError.Valid {
 		t.Errorf("want LastError IS NOT NULL")
 	}
 	if j.LastError.String != "the error msg" {
@@ -145,7 +143,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 
 func TestWorkerWorkRescuesPanic(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(context2.Background(), c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
 	called := 0
 	wm := WorkMap{
@@ -157,7 +155,7 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 	}
 	w := NewWorker(c, wm)
 
-	if err := c.Enqueue(context2.Background(), &Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,20 +164,20 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 		t.Errorf("want called=1 was: %d", called)
 	}
 
-	tx, err := c.pool.Begin()
+	tx, err := c.pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(context.Background())
 
-	j, err := findOneJob(context2.Background(), tx)
+	j, err := findOneJob(context.Background(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if j.ErrorCount != 1 {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
-	if j.LastError.Status == pgtype.Null {
+	if !j.LastError.Valid {
 		t.Errorf("want LastError IS NOT NULL")
 	}
 	if !strings.Contains(j.LastError.String, "the panic msg\n") {
@@ -196,10 +194,10 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 
 func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 	c := openTestClient(t)
-	defer truncateAndClose(context2.Background(), c.pool)
+	defer truncateAndClose(context.Background(), c.pool)
 
-	currentConns := c.pool.Stat().CurrentConnections
-	availConns := c.pool.Stat().AvailableConnections
+	currentConns := c.pool.Stat().TotalConns()
+	availConns := c.pool.Stat().IdleConns()
 
 	success := false
 	wm := WorkMap{}
@@ -210,7 +208,7 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 		t.Errorf("want didWork=false when no job was queued")
 	}
 
-	if err := c.Enqueue(context2.Background(), &Job{Type: "MyJob"}); err != nil {
+	if err := c.Enqueue(context.Background(), &Job{Type: "MyJob"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -222,27 +220,27 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 		t.Errorf("want success=false")
 	}
 
-	if currentConns != c.pool.Stat().CurrentConnections {
-		t.Errorf("want currentConns euqual: before=%d  after=%d", currentConns, c.pool.Stat().CurrentConnections)
+	if currentConns != c.pool.Stat().TotalConns() {
+		t.Errorf("want currentConns euqual: before=%d  after=%d", currentConns, c.pool.Stat().TotalConns())
 	}
-	if availConns != c.pool.Stat().AvailableConnections {
-		t.Errorf("want availConns euqual: before=%d  after=%d", availConns, c.pool.Stat().AvailableConnections)
+	if availConns != c.pool.Stat().IdleConns() {
+		t.Errorf("want availConns euqual: before=%d  after=%d", availConns, c.pool.Stat().TotalConns())
 	}
 
-	tx, err := c.pool.Begin()
+	tx, err := c.pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(context.Background())
 
-	j, err := findOneJob(context2.Background(), tx)
+	j, err := findOneJob(context.Background(), tx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if j.ErrorCount != 1 {
 		t.Errorf("want ErrorCount=1 was %d", j.ErrorCount)
 	}
-	if j.LastError.Status == pgtype.Null {
+	if !j.LastError.Valid {
 		t.Fatal("want non-nil LastError")
 	}
 	if want := "unknown job type: \"MyJob\""; j.LastError.String != want {
