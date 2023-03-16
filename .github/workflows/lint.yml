@@ -1,0 +1,24 @@
+name: golangci-lint
+on: [push]
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.17.3
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3.1.0
+        with:
+          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+          version: v1.45.2
+          only-new-issues: true
+      - name: golangci-lint goconst
+        uses: golangci/golangci-lint-action@v3.1.0
+        with:
+          version: v1.45.2
+          only-new-issues: true
+          # just show warnings
+          args: --issues-exit-code=0 --no-config --disable-all --enable goconst

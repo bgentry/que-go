@@ -3,7 +3,7 @@ package que
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 }
 
 func TestWorkerWorkOne(t *testing.T) {
@@ -66,7 +66,7 @@ func TestWorkerShutdown(t *testing.T) {
 
 func BenchmarkWorker(b *testing.B) {
 	c := openTestClient(b)
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 	defer func() {
 		log.SetOutput(os.Stdout)
 	}()
@@ -150,7 +150,6 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 		"MyJob": func(j *Job) error {
 			called++
 			panic("the panic msg")
-			return nil
 		},
 	}
 	w := NewWorker(c, wm)

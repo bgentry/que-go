@@ -3,14 +3,14 @@ package que
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
+	pgx "github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var testConnConfig = func() *pgxpool.Config {
-	pgConfig, err := pgxpool.ParseConfig(fmt.Sprintf("host=localhost database=que-go-test user=postgres password=postgres"))
+	pgConfig, err := pgxpool.ParseConfig("host=localhost database=que-go-test user=postgres password=postgres")
 	if err != nil {
 		panic(fmt.Sprintf("err generating configs. err=%s", err.Error()))
 	}
