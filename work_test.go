@@ -7,8 +7,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 func TestLockJob(t *testing.T) {
@@ -70,9 +68,9 @@ func TestLockJob(t *testing.T) {
 
 	// make sure conn was checked out of pool
 	stat := c.pool.Stat()
-	total, available := stat.CurrentConnections, stat.AvailableConnections
-	if want := total - 1; available != want {
-		t.Errorf("want available=%d, got %d", want, available)
+	total, idle := stat.TotalConns(), stat.IdleConns()
+	if want := total - 1; idle != want {
+		t.Errorf("want idle=%d, got %d", want, idle)
 	}
 
 	if err = j.Delete(context.Background()); err != nil {
@@ -230,8 +228,12 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 	}
 
 	// helper functions
-	newConn := func() *pgx.Conn {
-		conn, err := pgx.ConnectConfig(context.Background(), testConnConfig)
+	newPool := func() *pgxpool.Pool {
+		connPoolConfig := pgxpool.Config{
+			ConnConfig:   testConnConfig,
+			AfterConnect: PrepareStatements,
+		}
+		conn, err := pgxpool.NewWithConfig(context.Background(), &connPoolConfig)
 		if err != nil {
 			panic(err)
 		}
@@ -248,11 +250,11 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 		return backendPID
 	}
 	waitUntilBackendIsWaiting := func(backendPID int32, name string) {
-		conn := newConn()
+		pool := newPool()
 		i := 0
 		for {
 			var waiting bool
-			err := conn.QueryRow(context.Background(), `SELECT wait_event is not null from pg_stat_activity where pid=$1`, backendPID).Scan(&waiting)
+			err := pool.QueryRow(context.Background(), `SELECT wait_event is not null from pg_stat_activity where pid=$1`, backendPID).Scan(&waiting)
 			if err != nil {
 				panic(err)
 			}
@@ -288,8 +290,8 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 	secondAccessExclusiveBackendIDChan := make(chan int32)
 
 	go func() {
-		conn := newConn()
-		defer conn.Close(context.Background())
+		conn := newPool()
+		defer conn.Close()
 
 		tx, err := conn.Begin(context.Background())
 		if err != nil {
@@ -308,15 +310,20 @@ func TestLockJobAdvisoryRace(t *testing.T) {
 		backendID = <-secondAccessExclusiveBackendIDChan
 		waitUntilBackendIsWaiting(backendID, "second access exclusive lock")
 
-		err = tx.Rollback()
+		err = tx.Rollback(context.Background())
 		if err != nil {
 			panic(err)
 		}
 	}()
 
 	go func() {
-		conn := newConn()
-		defer conn.Close(context.Background())
+		pool := newPool()
+		defer pool.Close()
+
+		conn, err := pool.Acquire(context.Background())
+		if err != nil {
+			panic(err)
+		}
 
 		// synchronization point
 		secondAccessExclusiveBackendIDChan <- getBackendPID(conn)
@@ -437,7 +444,7 @@ func TestJobDone(t *testing.T) {
 	// make sure lock was released
 	var count int64
 	query := "SELECT count(*) FROM pg_locks WHERE locktype=$1 AND objid=$2::bigint"
-	if err = c.pool.QueryRow(query, "advisory", j.ID).Scan(&count); err != nil {
+	if err = c.pool.QueryRow(context.Background(), query, "advisory", j.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
@@ -446,9 +453,9 @@ func TestJobDone(t *testing.T) {
 
 	// make sure conn was returned to pool
 	stat := c.pool.Stat()
-	total, available := stat.CurrentConnections, stat.AvailableConnections
-	if total != available {
-		t.Errorf("want available=total, got available=%d total=%d", available, total)
+	total, idle := stat.TotalConns(), stat.IdleConns()
+	if total != idle {
+		t.Errorf("want idle=total, got idle=%d total=%d", idle, total)
 	}
 }
 
@@ -496,7 +503,7 @@ func TestJobDeleteFromTx(t *testing.T) {
 	}
 
 	// start a transaction
-	tx, err := conn.Begin()
+	tx, err := conn.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +513,7 @@ func TestJobDeleteFromTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = tx.Commit(); err != nil {
+	if err = tx.Commit(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -557,7 +564,7 @@ func TestJobDeleteFromTxRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = tx.Rollback(); err != nil {
+	if err = tx.Rollback(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -627,9 +634,9 @@ func TestJobError(t *testing.T) {
 
 	// make sure conn was returned to pool
 	stat := c.pool.Stat()
-	total, available := stat.CurrentConnections, stat.AvailableConnections
-	if total != available {
-		t.Errorf("want available=total, got available=%d total=%d", available, total)
+	total, idle := stat.TotalConns(), stat.IdleConns()
+	if total != idle {
+		t.Errorf("want idle=total, got idle=%d total=%d", idle, total)
 	}
 }
 
@@ -687,8 +694,8 @@ func TestJobErrorWithRunAt(t *testing.T) {
 
 	// make sure conn was returned to pool
 	stat := c.pool.Stat()
-	total, available := stat.CurrentConnections, stat.AvailableConnections
-	if total != available {
-		t.Errorf("want available=total, got available=%d total=%d", available, total)
+	total, idle := stat.TotalConns(), stat.IdleConns()
+	if total != idle {
+		t.Errorf("want idle=total, got idle=%d total=%d", idle, total)
 	}
 }

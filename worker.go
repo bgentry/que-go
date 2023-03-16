@@ -2,7 +2,7 @@ package que
 
 import (
 	"bytes"
-	context2 "context"
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -107,7 +107,7 @@ func (w *Worker) Work() {
 }
 
 func (w *Worker) WorkOne() (didWork bool) {
-	j, err := w.c.LockJob(context2.Background(), w.Queue)
+	j, err := w.c.LockJob(context.Background(), w.Queue)
 	if err != nil {
 		log.Printf("attempting to lock job: %v", err)
 		return
@@ -115,7 +115,7 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if j == nil {
 		return // no job was available
 	}
-	defer j.Done(context2.Background())
+	defer j.Done(context.Background())
 	defer recoverPanic(j)
 
 	didWork = true
@@ -124,7 +124,7 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if !ok {
 		msg := fmt.Sprintf("unknown job type: %q", j.Type)
 		log.Println(msg)
-		if err = j.Error(context2.Background(), msg); err != nil {
+		if err = j.Error(context.Background(), msg); err != nil {
 			log.Printf("attempting to save error on job %d: %v", j.ID, err)
 		}
 		return
@@ -133,9 +133,9 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if err = wf(j); err != nil {
 		var errRunAt *ErrorRunAt
 		if errors.As(err, &errRunAt) {
-			j.ErrorRunAt(context2.Background(), errRunAt.Error(), errRunAt.RunAt)
+			j.ErrorRunAt(context.Background(), errRunAt.Error(), errRunAt.RunAt)
 		} else {
-			j.Error(context2.Background(), err.Error())
+			j.Error(context.Background(), err.Error())
 		}
 
 		return
@@ -180,7 +180,7 @@ func recoverPanic(j *Job) {
 		fmt.Fprintln(buf, "[...]")
 		stacktrace := buf.String()
 		log.Printf("event=panic job_id=%d job_type=%s\n%s", j.ID, j.Type, stacktrace)
-		if err := j.Error(context2.Background(), stacktrace); err != nil {
+		if err := j.Error(context.Background(), stacktrace); err != nil {
 			log.Printf("attempting to save error on job %d: %v", j.ID, err)
 		}
 	}
