@@ -133,9 +133,9 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if err = wf(j); err != nil {
 		var errRunAt *ErrorRunAt
 		if errors.As(err, &errRunAt) {
-			j.ErrorRunAt(context.Background(), errRunAt.Error(), errRunAt.RunAt)
+			_ = j.ErrorRunAt(context.Background(), errRunAt.Error(), errRunAt.RunAt)
 		} else {
-			j.Error(context.Background(), err.Error())
+			_ = j.Error(context.Background(), err.Error())
 		}
 
 		return

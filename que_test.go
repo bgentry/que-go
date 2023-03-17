@@ -2,19 +2,15 @@ package que
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var testConnConfig = func() *pgxpool.Config {
-	pgConfig, err := pgxpool.ParseConfig("host=localhost database=que-go-test user=postgres password=postgres")
-	if err != nil {
-		panic(fmt.Sprintf("err generating configs. err=%s", err.Error()))
-	}
-	return pgConfig
+var testConnConfig = func() pgxpool.Config {
+	poolConfig, _ := pgxpool.ParseConfig("host=localhost database=que-go-test user=postgres password=postgres")
+	return *poolConfig
 }
 
 func openTestClientMaxConns(t testing.TB, maxConnections int32) *Client {
@@ -22,7 +18,7 @@ func openTestClientMaxConns(t testing.TB, maxConnections int32) *Client {
 	connPoolConfig.MaxConns = maxConnections
 	connPoolConfig.AfterConnect = PrepareStatements
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), connPoolConfig)
+	pool, err := pgxpool.NewWithConfig(context.Background(), &connPoolConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

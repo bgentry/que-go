@@ -124,7 +124,7 @@ func TestWorkerWorkReturnsError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
+	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	j, err := findOneJob(context.Background(), tx)
 	if err != nil {
@@ -167,7 +167,7 @@ func TestWorkerWorkRescuesPanic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
+	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	j, err := findOneJob(context.Background(), tx)
 	if err != nil {
@@ -195,10 +195,9 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 	c := openTestClient(t)
 	defer truncateAndClose(context.Background(), c.pool)
 
-	currentConns := c.pool.Stat().TotalConns()
-	availConns := c.pool.Stat().IdleConns()
+	idleConns := c.pool.Stat().IdleConns()
+	availConns := c.pool.Stat().AcquiredConns()
 
-	success := false
 	wm := WorkMap{}
 	w := NewWorker(c, wm)
 
@@ -215,22 +214,19 @@ func TestWorkerWorkOneTypeNotInMap(t *testing.T) {
 	if !didWork {
 		t.Errorf("want didWork=true")
 	}
-	if success {
-		t.Errorf("want success=false")
-	}
 
-	if currentConns != c.pool.Stat().TotalConns() {
-		t.Errorf("want currentConns euqual: before=%d  after=%d", currentConns, c.pool.Stat().TotalConns())
+	if idleConns+1 != c.pool.Stat().IdleConns() {
+		t.Errorf("want idleConns euqual: before=%d  after=%d", idleConns, c.pool.Stat().IdleConns())
 	}
-	if availConns != c.pool.Stat().IdleConns() {
-		t.Errorf("want availConns euqual: before=%d  after=%d", availConns, c.pool.Stat().TotalConns())
+	if availConns != c.pool.Stat().AcquiredConns() {
+		t.Errorf("want availConns euqual: before=%d  after=%d", availConns, c.pool.Stat().AcquiredConns())
 	}
 
 	tx, err := c.pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
+	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	j, err := findOneJob(context.Background(), tx)
 	if err != nil {

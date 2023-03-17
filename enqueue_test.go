@@ -141,7 +141,7 @@ func TestEnqueueInTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback(context.Background())
+	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if err = c.EnqueueInTx(context.Background(), &Job{Type: "MyJob"}, tx); err != nil {
 		t.Fatal(err)

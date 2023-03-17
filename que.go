@@ -278,7 +278,6 @@ func (c *Client) LockJob(ctx context.Context, queue string) (*Job, error) {
 			return nil, err
 		}
 	}
-	conn.Release()
 	return nil, ErrAgain
 }
 
