@@ -30,7 +30,7 @@ WITH RECURSIVE jobs AS (
   SELECT (j).*, pg_try_advisory_lock((j).job_id) AS locked
   FROM (
     SELECT j
-    FROM practice_analytics.que_jobs AS j
+    FROM que_jobs AS j
     WHERE queue = $1::text
     AND run_at <= now()
     ORDER BY priority, run_at, job_id
@@ -41,7 +41,7 @@ WITH RECURSIVE jobs AS (
     FROM (
       SELECT (
         SELECT j
-        FROM practice_analytics.que_jobs AS j
+        FROM que_jobs AS j
         WHERE queue = $1::text
         AND run_at <= now()
         AND (priority, run_at, job_id) > (jobs.priority, jobs.run_at, jobs.job_id)
@@ -66,7 +66,7 @@ SELECT pg_advisory_unlock($1)
 
 	sqlCheckJob = `
 SELECT true AS exists
-FROM   practice_analytics.que_jobs
+FROM   que_jobs
 WHERE  queue    = $1::text
 AND    priority = $2::smallint
 AND    run_at   = $3::timestamptz
@@ -74,7 +74,7 @@ AND    job_id   = $4::bigint
 `
 
 	sqlSetError = `
-UPDATE practice_analytics.que_jobs
+UPDATE que_jobs
 SET error_count = $1::integer,
     run_at      = now() + $2::bigint * '1 second'::interval,
     last_error  = $3::text
@@ -85,14 +85,14 @@ AND   job_id    = $7::bigint
 `
 
 	sqlInsertJob = `
-INSERT INTO practice_analytics.que_jobs
+INSERT INTO que_jobs
 (queue, priority, run_at, job_class, args, shard_id)
 VALUES
 (coalesce($1::text, ''::text), coalesce($2::smallint, 100::smallint), coalesce($3::timestamptz, now()::timestamptz), $4::text, coalesce($5::json, '[]'::json), $6::uuid)
 `
 
 	sqlDeleteJob = `
-DELETE FROM practice_analytics.que_jobs
+DELETE FROM que_jobs
 WHERE queue    = $1::text
 AND   priority = $2::smallint
 AND   run_at   = $3::timestamptz
@@ -107,7 +107,7 @@ SELECT queue,
        sum((error_count > 0)::int) AS count_errored,
        max(error_count)            AS highest_error_count,
        min(run_at)                 AS oldest_run_at
-FROM practice_analytics.que_jobs
+FROM que_jobs
 LEFT JOIN (
   SELECT (classid::bigint << 32) + objid::bigint AS job_id
   FROM pg_locks
@@ -118,7 +118,7 @@ ORDER BY count(*) DESC
 `
 
 	sqlWorkerStates = `
-SELECT practice_analytics.que_jobs.*,
+SELECT que_jobs.*,
        pg.pid          AS pg_backend_pid,
        pg.state        AS pg_state,
        pg.state_change AS pg_state_changed_at,
@@ -126,7 +126,7 @@ SELECT practice_analytics.que_jobs.*,
        pg.query_start  AS pg_last_query_started_at,
        pg.xact_start   AS pg_transaction_started_at,
        pg.waiting      AS pg_waiting_on_lock
-FROM practice_analytics.que_jobs
+FROM que_jobs
 JOIN (
   SELECT (classid::bigint << 32) + objid::bigint AS job_id, pg_stat_activity.*
   FROM pg_locks
