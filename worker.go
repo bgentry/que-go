@@ -102,7 +102,6 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	defer j.Done(ctx)
 	defer recoverPanic(ctx, j)
 	didWork = true
-	wlog.InfoC(ctx, fmt.Sprintf("job id %v is picked up que name %s %s", j.ID, j.Queue, j.Type))
 	j.WorkerID = w.ID
 	j.Client = w.c
 	wf, ok := w.m[j.Type]
@@ -123,7 +122,7 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	if err = j.Delete(ctx); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
+	wlog.InfoC(ctx, fmt.Sprintf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type))
 	return
 }
 
