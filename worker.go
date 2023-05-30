@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 )
 
 // WorkFunc is a function that performs a Job. If an error is returned, the job
@@ -100,8 +101,8 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	}
 	defer j.Done(ctx)
 	defer recoverPanic(ctx, j)
-
 	didWork = true
+	wlog.InfoC(ctx, fmt.Sprintf("job id %v is picked up que name %s %s", j.ID, j.Queue, j.Type))
 	j.WorkerID = w.ID
 	j.Client = w.c
 	wf, ok := w.m[j.Type]
