@@ -122,7 +122,9 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	if err = j.Delete(ctx); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
+	//
 	wlog.InfoC(ctx, fmt.Sprintf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type))
+
 	return
 }
 
