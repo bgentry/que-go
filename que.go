@@ -3,11 +3,13 @@ package que
 import (
 	"context"
 	"errors"
-	"sync"
-	"time"
-
+	"github.com/jackc/pgconn"
+	pgxnew "github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/weave-lab/pgx"
 	"github.com/weave-lab/pgx/pgtype"
+	"sync"
+	"time"
 	"weavelab.xyz/monorail/shared/go-utilities/null"
 )
 
@@ -55,8 +57,8 @@ type Job struct {
 
 	mu      sync.Mutex
 	deleted bool
-	pool    *pgx.ConnPool
-	conn    *pgx.Conn
+	pool    *pgxpool.Pool
+	conn    *pgxpool.Conn
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -64,7 +66,7 @@ type Job struct {
 // Done(). At that point, this conn will be returned to the pool and it is
 // unsafe to keep using it. This function will return nil if the Job's
 // connection has already been released with Done().
-func (j *Job) Conn() *pgx.Conn {
+func (j *Job) Conn() *pgxpool.Conn {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
@@ -75,7 +77,7 @@ func (j *Job) Conn() *pgx.Conn {
 //
 // You must also later call Done() to return this job's database connection to
 // the pool.
-func (j *Job) Delete() error {
+func (j *Job) Delete(ctx context.Context) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
@@ -83,7 +85,7 @@ func (j *Job) Delete() error {
 		return nil
 	}
 
-	_, err := j.conn.Exec("que_destroy_job", j.Queue, j.Priority, j.RunAt, j.ID)
+	_, err := j.conn.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
@@ -94,7 +96,7 @@ func (j *Job) Delete() error {
 
 // Done releases the Postgres advisory lock on the job and returns the database
 // connection to the pool.
-func (j *Job) Done() {
+func (j *Job) Done(ctx context.Context) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
@@ -106,9 +108,9 @@ func (j *Job) Done() {
 	var ok bool
 	// Swallow this error because we don't want an unlock failure to cause work to
 	// stop.
-	_ = j.conn.QueryRow("que_unlock_job", j.ID).Scan(&ok)
+	_ = j.conn.QueryRow(ctx, sqlUnlockJob, j.ID).Scan(&ok)
 
-	j.pool.Release(j.conn)
+	j.conn.Release()
 	j.pool = nil
 	j.conn = nil
 }
@@ -119,11 +121,11 @@ func (j *Job) Done() {
 //
 // You must also later call Done() to return this job's database connection to
 // the pool.
-func (j *Job) Error(msg string) error {
+func (j *Job) Error(ctx context.Context, msg string) error {
 	errorCount := j.ErrorCount + 1
 	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
 
-	_, err := j.conn.Exec("que_set_error", errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
+	_, err := j.conn.Exec(ctx, sqlSetError, errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
@@ -133,16 +135,16 @@ func (j *Job) Error(msg string) error {
 // Client is a Que client that can add jobs to the queue and remove jobs from
 // the queue.
 type Client struct {
-	pool    *pgx.ConnPool
+	pool    *pgxpool.Pool
 	inserts map[string]string
 
 	// TODO: add a way to specify default queueing options
 }
 
 // NewClient creates a new Client that uses the pgx pool.
-func NewClient(pool *pgx.ConnPool) *Client {
+func NewClient(pool *pgxpool.Pool) *Client {
 	// prepare custom sql if exists
-	return &Client{pool, make(map[string]string)}
+	return &Client{pool: pool, inserts: make(map[string]string)}
 }
 
 // ErrMissingType is returned when you attempt to enqueue a job with no Type
@@ -150,40 +152,40 @@ func NewClient(pool *pgx.ConnPool) *Client {
 var ErrMissingType = errors.New("job type must be specified")
 var ErrNoCustomEnqueue = errors.New("no custom sql enqueue was found")
 
-func (c *Client) AddCustomEnqueues(enq map[string]string) error {
-	for name, sql := range enq {
-		if _, err := c.pool.Prepare(name, sql); err != nil {
-			return err
-		}
-		c.inserts[name] = sql
-	}
-	return nil
-}
+//func (c *Client) AddCustomEnqueues(enq map[string]string) error {
+//	for name, sql := range enq {
+//		if _, err := c.pool.Prepare(name, sql); err != nil {
+//			return err
+//		}
+//		c.inserts[name] = sql
+//	}
+//	return nil
+//}
 
 // EnqueueCustom allows you to use a custom sql insert specified at queue creation time
-func (c *Client) EnqueueCustom(j *Job, sql string) error {
+func (c *Client) EnqueueCustom(ctx context.Context, j *Job, sql string) error {
 	if _, ok := c.inserts[sql]; !ok {
 		return ErrNoCustomEnqueue
 	}
 
-	return execEnqueue(j, c.pool, sql)
+	return execEnqueue(ctx, j, c.pool, sql)
 }
 
 // Enqueue adds a job to the queue.
-func (c *Client) Enqueue(j *Job) error {
-	return execEnqueue(j, c.pool, "que_insert_job")
+func (c *Client) Enqueue(ctx context.Context, j *Job) error {
+	return execEnqueue(ctx, j, c.pool, sqlInsertJob)
 }
 
-func (c *Client) BulkCustomEnqueue(jobs []*Job, sql string) error {
+func (c *Client) BulkCustomEnqueue(ctx context.Context, jobs []*Job, sql string) error {
 	if _, ok := c.inserts[sql]; !ok {
 		return ErrNoCustomEnqueue
 	}
 
-	return bulkEnqueue(jobs, c.pool, sql)
+	return bulkEnqueue(ctx, jobs, c.pool, sql)
 }
 
-func (c *Client) BulkEnqueue(jobs []*Job) error {
-	return bulkEnqueue(jobs, c.pool, "que_insert_job")
+func (c *Client) BulkEnqueue(ctx context.Context, jobs []*Job) error {
+	return bulkEnqueue(ctx, jobs, c.pool, sqlInsertJob)
 }
 
 // EnqueueInTx adds a job to the queue within the scope of the transaction tx.
@@ -192,8 +194,8 @@ func (c *Client) BulkEnqueue(jobs []*Job) error {
 //
 // It is the caller's responsibility to Commit or Rollback the transaction after
 // this function is called.
-func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
-	return execEnqueue(j, tx, "que_insert_job")
+func (c *Client) EnqueueInTx(ctx context.Context, j *Job, tx *pgxpool.Tx) error {
+	return execEnqueue(ctx, j, tx, sqlInsertJob)
 }
 
 type PreparedJob struct {
@@ -249,22 +251,22 @@ func prepareJob(j *Job) (*PreparedJob, error) {
 	return prepped, nil
 }
 
-func execEnqueue(j *Job, q queryable, sql string) error {
+func execEnqueue(ctx context.Context, j *Job, q queryable, sql string) error {
 	prepped, err := prepareJob(j)
 	if err != nil {
 		return err
 	}
 
-	_, err = q.Exec(sql, prepped.Queue, prepped.Priority, prepped.RunAt, prepped.Type, prepped.Args, prepped.ShardID)
+	_, err = q.Exec(ctx, sql, prepped.Queue, prepped.Priority, prepped.RunAt, prepped.Type, prepped.Args, prepped.ShardID)
 	return err
 }
 
 const maxBatch = 5000 // Force a maximum batch volume to deal with high volume database deadlocks
-func bulkEnqueue(jobs []*Job, connectionPool *pgx.ConnPool, sql string) error {
-	ctx := context.Background()
+func bulkEnqueue(ctx context.Context, jobs []*Job, connectionPool *pgxpool.Pool, sql string) error {
 	batches := makeBatches(jobs, maxBatch)
 	for _, batchJobs := range batches {
-		batch := connectionPool.BeginBatch()
+		batch := &pgxnew.Batch{}
+
 		for _, job := range batchJobs {
 			prepped, err := prepareJob(job)
 			if err != nil {
@@ -276,10 +278,10 @@ func bulkEnqueue(jobs []*Job, connectionPool *pgx.ConnPool, sql string) error {
 				[]int16{},
 			)
 		}
-		err := batch.Send(ctx, nil)
-		if err != nil {
-			return err
-		}
+		_ = connectionPool.SendBatch(ctx, nil)
+		//if err != nil {
+		//	return err
+		//}
 	}
 	return nil
 }
@@ -294,9 +296,9 @@ func makeBatches(jobs []*Job, batchSize int) [][]*Job {
 }
 
 type queryable interface {
-	Exec(sql string, arguments ...interface{}) (commandTag pgx.CommandTag, err error)
-	Query(sql string, args ...interface{}) (*pgx.Rows, error)
-	QueryRow(sql string, args ...interface{}) *pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (commandTag pgconn.CommandTag, err error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgxnew.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgxnew.Row
 }
 
 // Maximum number of loop iterations in LockJob before giving up.  This is to
@@ -323,8 +325,8 @@ var ErrAgain = errors.New("maximum number of LockJob attempts reached")
 //
 // After the Job has been worked, you must call either Done() or Error() on it
 // in order to return the database connection to the pool and remove the lock.
-func (c *Client) LockJob(queue string) (*Job, error) {
-	conn, err := c.pool.Acquire()
+func (c *Client) LockJob(ctx context.Context, queue string) (*Job, error) {
+	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +334,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 	j := Job{pool: c.pool, conn: conn}
 
 	for i := 0; i < maxLockJobAttempts; i++ {
-		err = conn.QueryRow("que_lock_job", queue).Scan(
+		err = conn.QueryRow(ctx, sqlLockJob, queue).Scan(
 			&j.Queue,
 			&j.Priority,
 			&j.RunAt,
@@ -345,7 +347,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 		)
 
 		if err != nil {
-			c.pool.Release(conn)
+			conn.Release()
 			if err == pgx.ErrNoRows {
 				return nil, nil
 			}
@@ -365,7 +367,7 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 		// I'm not sure how to reliably commit a transaction that deletes
 		// the job in a separate thread between lock_job and check_job.
 		var ok bool
-		err = conn.QueryRow("que_check_job", j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
+		err = conn.QueryRow(ctx, sqlCheckJob, j.Queue, j.Priority, j.RunAt, j.ID).Scan(&ok)
 		if err == nil {
 			return &j, nil
 		} else if err == pgx.ErrNoRows {
@@ -375,14 +377,14 @@ func (c *Client) LockJob(queue string) (*Job, error) {
 			// eventually causing the server to run out of locks.
 			//
 			// Also swallow the possible error, exactly like in Done.
-			_ = conn.QueryRow("que_unlock_job", j.ID).Scan(&ok)
+			_ = conn.QueryRow(ctx, sqlUnlockJob, j.ID).Scan(&ok)
 			continue
 		} else {
-			c.pool.Release(conn)
+			conn.Release()
 			return nil, err
 		}
 	}
-	c.pool.Release(conn)
+	conn.Release()
 	return nil, ErrAgain
 }
 
@@ -395,9 +397,9 @@ var preparedStatements = map[string]string{
 	"que_unlock_job":  sqlUnlockJob,
 }
 
-func PrepareStatements(conn *pgx.Conn) error {
+func PrepareStatements(ctx context.Context, conn *pgxnew.Conn) error {
 	for name, sql := range preparedStatements {
-		if _, err := conn.Prepare(name, sql); err != nil {
+		if _, err := conn.Prepare(ctx, name, sql); err != nil {
 			return err
 		}
 	}

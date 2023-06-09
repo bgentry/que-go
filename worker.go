@@ -2,6 +2,7 @@ package que
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"weavelab.xyz/monorail/shared/wlib/wlog"
 )
 
 // WorkFunc is a function that performs a Job. If an error is returned, the job
@@ -72,7 +74,7 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 
 // Work pulls jobs off the Worker's Queue at its Interval. This function only
 // returns after Shutdown() is called, so it should be run in its own goroutine.
-func (w *Worker) Work() {
+func (w *Worker) Work(ctx context.Context) {
 	for {
 		select {
 		case <-w.ch:
@@ -80,7 +82,7 @@ func (w *Worker) Work() {
 			return
 		case <-time.After(w.Interval):
 			for {
-				if didWork := w.WorkOne(); !didWork {
+				if didWork := w.WorkOne(ctx); !didWork {
 					break // didn't do any work, go back to sleep
 				}
 			}
@@ -88,8 +90,8 @@ func (w *Worker) Work() {
 	}
 }
 
-func (w *Worker) WorkOne() (didWork bool) {
-	j, err := w.c.LockJob(w.Queue)
+func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
+	j, err := w.c.LockJob(ctx, w.Queue)
 	if err != nil {
 		log.Printf("attempting to lock job: %v", err)
 		return
@@ -97,9 +99,8 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if j == nil {
 		return // no job was available
 	}
-	defer j.Done()
-	defer recoverPanic(j)
-
+	defer j.Done(ctx)
+	defer recoverPanic(ctx, j)
 	didWork = true
 	j.WorkerID = w.ID
 	j.Client = w.c
@@ -107,21 +108,23 @@ func (w *Worker) WorkOne() (didWork bool) {
 	if !ok {
 		msg := fmt.Sprintf("unknown job type: %q", j.Type)
 		log.Println(msg)
-		if err = j.Error(msg); err != nil {
+		if err = j.Error(ctx, msg); err != nil {
 			log.Printf("attempting to save error on job %d: %v", j.ID, err)
 		}
 		return
 	}
 
 	if err = wf(j); err != nil {
-		j.Error(err.Error())
+		j.Error(ctx, err.Error())
 		return
 	}
 
-	if err = j.Delete(); err != nil {
+	if err = j.Delete(ctx); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	log.Printf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type)
+	//
+	wlog.InfoC(ctx, fmt.Sprintf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type))
+
 	return
 }
 
@@ -145,7 +148,7 @@ func (w *Worker) Shutdown() {
 
 // recoverPanic tries to handle panics in job execution.
 // A stacktrace is stored into Job last_error.
-func recoverPanic(j *Job) {
+func recoverPanic(ctx context.Context, j *Job) {
 	if r := recover(); r != nil {
 		// record an error on the job with panic message and stacktrace
 		stackBuf := make([]byte, 1024)
@@ -157,7 +160,7 @@ func recoverPanic(j *Job) {
 		fmt.Fprintln(buf, "[...]")
 		stacktrace := buf.String()
 		log.Printf("event=panic job_id=%d job_type=%s\n%s", j.ID, j.Type, stacktrace)
-		if err := j.Error(stacktrace); err != nil {
+		if err := j.Error(ctx, stacktrace); err != nil {
 			log.Printf("attempting to save error on job %d: %v", j.ID, err)
 		}
 	}
@@ -187,7 +190,7 @@ func NewWorkerPool(c *Client, wm WorkMap, count int) *WorkerPool {
 }
 
 // Start starts all of the Workers in the WorkerPool.
-func (w *WorkerPool) Start() {
+func (w *WorkerPool) Start(ctx context.Context) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -196,7 +199,7 @@ func (w *WorkerPool) Start() {
 		w.workers[i].Interval = w.Interval
 		w.workers[i].Queue = w.Queue
 		w.workers[i].ID = int(i)
-		go w.workers[i].Work()
+		go w.workers[i].Work(ctx)
 	}
 }
 
