@@ -1,12 +1,14 @@
 package que
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/pgtype"
+	pgxV4 "github.com/jackc/pgx/v4"
 )
 
 // Job is a single unit of work for Que to perform.
@@ -155,9 +157,9 @@ func NewClient(pool *pgx.ConnPool) *Client {
 // specified.
 var ErrMissingType = errors.New("job type must be specified")
 
-// Enqueue adds a job to the queue.
-func (c *Client) Enqueue(j *Job) error {
-	return execEnqueue(j, c.pool)
+// Enqueue method appends a job to the queue adhering to the transactional flow of the Talon service.
+func (c *Client) Enqueue(j *Job, txn pgxV4.Tx) error {
+	return execEnqueue(j, txn)
 }
 
 // EnqueueInTx adds a job to the queue within the scope of the transaction tx.
@@ -166,11 +168,11 @@ func (c *Client) Enqueue(j *Job) error {
 //
 // It is the caller's responsibility to Commit or Rollback the transaction after
 // this function is called.
-func (c *Client) EnqueueInTx(j *Job, tx *pgx.Tx) error {
-	return execEnqueue(j, tx)
+func (c *Client) EnqueueInTx(j *Job, txn pgxV4.Tx) error {
+	return execEnqueue(j, txn)
 }
 
-func execEnqueue(j *Job, q queryable) error {
+func execEnqueue(j *Job, txn pgxV4.Tx) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}
@@ -207,7 +209,7 @@ func execEnqueue(j *Job, q queryable) error {
 		args.Status = pgtype.Present
 	}
 
-	_, err := q.Exec("que_insert_job", queue, priority, runAt, j.Type, args)
+	_, err := txn.Exec(context.Background(), "que_insert_job", queue, priority, runAt, j.Type, args)
 	return err
 }
 
