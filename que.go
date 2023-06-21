@@ -209,7 +209,7 @@ func execEnqueue(j *Job, txn pgxV4.Tx) error {
 		args.Status = pgtype.Present
 	}
 
-	_, err := txn.Exec(context.Background(), "que_insert_job", queue, priority, runAt, j.Type, args)
+	_, err := txn.Exec(context.Background(), sqlInsertJob, queue, priority, runAt, j.Type, args)
 	return err
 }
 
