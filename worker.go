@@ -138,7 +138,6 @@ func (w *Worker) printAvailableDBCons(n int) {
 }
 
 func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
-
 	for i := 0; i < maxLockJobAttempts; i++ {
 
 		tx, err := w.c.pool.Begin(ctx)
@@ -172,7 +171,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 				log.Printf("attempting to lock the job from wroker %v : %v", n, err)
 				return
 			} else {
-				log.Printf("received error from wroker %v.... retrying : %v", n, err)
+				log.Printf("attempt %v | received error from wroker %v.... retrying : %v", i+1, n, err)
 				continue
 			}
 		} else {
@@ -189,6 +188,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			didWork = true
 			job.WorkerID = w.ID
 			job.Client = w.c
+			log.Printf("attempt %v from woker %v| sucessfully locked job : %v", i+1, n, j.ID)
 
 			wf, ok := w.m[job.Type]
 			if !ok {
@@ -342,7 +342,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 		w.workers[i].Queue = w.Queue
 		w.workers[i].ID = int(i)
 		go w.workers[i].Work(ctx, i)
-		go w.workers[i].printAvailableDBCons(i)
+		//go w.workers[i].printAvailableDBCons(i)
 	}
 }
 
