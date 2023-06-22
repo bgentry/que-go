@@ -93,6 +93,7 @@ func (w *Worker) Work(ctx context.Context) {
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	j, err := w.c.GlobalLockJob(ctx, w.Queue)
 	if j != nil && j.tx != nil {
+		// roll back the transaction if we didn't get a job
 		defer j.tx.Rollback(ctx)
 	}
 	if err != nil {
