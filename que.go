@@ -8,7 +8,6 @@ import (
 	pgxnew "github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/weave-lab/pgx/pgtype"
-	"log"
 	"sync"
 	"time"
 	"weavelab.xyz/monorail/shared/go-utilities/null"
@@ -60,7 +59,7 @@ type Job struct {
 	deleted bool
 	pool    *pgxpool.Pool
 	conn    *pgxpool.Conn
-	tx      pgx.Tx
+	tx      Tx
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -87,7 +86,7 @@ func (j *Job) Delete(ctx context.Context) error {
 		return nil
 	}
 
-	_, err := j.tx.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	err := j.tx.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
@@ -407,37 +406,38 @@ func PrepareStatements(ctx context.Context, conn *pgxnew.Conn) error {
 	}
 	return nil
 }
-func (c *Client) GlobalLockJob(ctx context.Context, queue string) (*Job, error) {
 
-	tx, err := c.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	j := Job{pool: c.pool, tx: tx}
-
-	for i := 0; i < maxLockJobAttempts; i++ {
-		err = j.tx.QueryRow(ctx, sqlGlobalLockJob, queue).Scan(
-			&j.Queue,
-			&j.Priority,
-			&j.RunAt,
-			&j.ID,
-			&j.Type,
-			&j.Args,
-			&j.ErrorCount,
-			&j.ShardID,
-			&j.LastError,
-		)
-
-		if err == nil {
-			return &j, nil
-		} else if err == pgx.ErrNoRows {
-			return nil, err
-		} else {
-			log.Printf("received error.... retrying : %v", err)
-			continue
-		}
-
-	}
-	return &j, ErrAgain
-}
+//func (c *Client) GlobalLockJob(ctx context.Context, queue string) (*Job, error) {
+//
+//	tx, err := c.pool.Begin(ctx)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	j := Job{pool: c.pool}
+//
+//	for i := 0; i < maxLockJobAttempts; i++ {
+//		err = j.tx.QueryRow(ctx, sqlGlobalLockJob, queue).Scan(
+//			&j.Queue,
+//			&j.Priority,
+//			&j.RunAt,
+//			&j.ID,
+//			&j.Type,
+//			&j.Args,
+//			&j.ErrorCount,
+//			&j.ShardID,
+//			&j.LastError,
+//		)
+//
+//		if err == nil {
+//			return &j, nil
+//		} else if err == pgx.ErrNoRows {
+//			return nil, err
+//		} else {
+//			log.Printf("received error.... retrying : %v", err)
+//			continue
+//		}
+//
+//	}
+//	return &j, ErrAgain
+//}

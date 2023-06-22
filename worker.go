@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	"log"
 	"os"
 	"runtime"
@@ -91,6 +92,38 @@ func (w *Worker) Work(ctx context.Context) {
 	}
 }
 
+type Tx struct {
+	tx pgx.Tx
+	mu sync.Mutex
+}
+
+func (ct *Tx) Rollback(ctx context.Context) error {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	return ct.tx.Rollback(ctx)
+}
+
+func (ct *Tx) Commit(ctx context.Context) error {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	return ct.tx.Commit(ctx)
+}
+func (ct *Tx) QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	return ct.tx.QueryRow(ctx, sql, args...)
+}
+func (ct *Tx) Exec(ctx context.Context, sql string, args ...interface{}) error {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	_, err := ct.tx.Exec(ctx, sql, args...)
+	return err
+}
+
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 
 	tx, err := w.c.pool.Begin(ctx)
@@ -98,11 +131,14 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 		wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
 		return
 	}
-	defer tx.Rollback(ctx)
+	transaction := Tx{
+		tx: tx,
+	}
+	defer transaction.Rollback(ctx)
 
-	j := Job{pool: w.c.pool, tx: tx}
+	j := Job{}
 	for i := 0; i < maxLockJobAttempts; i++ {
-		err = j.tx.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
+		err = transaction.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
 			&j.Queue,
 			&j.Priority,
 			&j.RunAt,
@@ -134,6 +170,9 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	didWork = true
 	job.WorkerID = w.ID
 	job.Client = w.c
+
+	//fmt.Println("job type is ", job.Type, job.ID)
+	//time.Sleep(time.Second * 5)
 	wf, ok := w.m[job.Type]
 	if !ok {
 		msg := fmt.Sprintf("unknown job type: %q", j.Type)
@@ -149,10 +188,11 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 		return
 	}
 
-	if err = job.Delete(ctx); err != nil {
+	err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	if err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	job.tx.Commit(ctx)
+	transaction.Commit(ctx)
 
 	wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
 
