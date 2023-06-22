@@ -76,7 +76,7 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 
 // Work pulls jobs off the Worker's Queue at its Interval. This function only
 // returns after Shutdown() is called, so it should be run in its own goroutine.
-func (w *Worker) Work(ctx context.Context) {
+func (w *Worker) Work(ctx context.Context, n int) {
 
 	for {
 		select {
@@ -85,7 +85,7 @@ func (w *Worker) Work(ctx context.Context) {
 			return
 		case <-time.After(w.Interval):
 			for {
-				if didWork := w.WorkOne(ctx); !didWork {
+				if didWork := w.WorkOne(ctx, n); !didWork {
 					break // didn't do any work, go back to sleep
 				}
 			}
@@ -137,7 +137,7 @@ func (w *Worker) printAvailableDBCons(n int) {
 	}
 }
 
-func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
+func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 
 	for i := 0; i < maxLockJobAttempts; i++ {
 
@@ -169,10 +169,10 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 				log.Printf("error while rolling back %v", err)
 			}
 			if strings.Contains(err.Error(), "no rows in result set") {
-				log.Printf("attempting to lock the job : %v", err)
+				log.Printf("attempting to lock the job from wroker %v : %v", n, err)
 				return
 			} else {
-				log.Printf("received error.... retrying : %v", err)
+				log.Printf("received error from wroker %v.... retrying : %v", n, err)
 				continue
 			}
 		} else {
@@ -224,7 +224,7 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 				log.Printf("error while Committing changes  %v", err)
 
 			}
-			wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
+			wlog.InfoC(ctx, fmt.Sprintf("wroker %v event is done =job_worked job_id=%d job_type=%s", n, j.ID, j.Type))
 			break
 		}
 
@@ -341,7 +341,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 		w.workers[i].Interval = w.Interval
 		w.workers[i].Queue = w.Queue
 		w.workers[i].ID = int(i)
-		go w.workers[i].Work(ctx)
+		go w.workers[i].Work(ctx, i)
 		go w.workers[i].printAvailableDBCons(i)
 	}
 }
