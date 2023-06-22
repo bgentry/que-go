@@ -140,11 +140,14 @@ func (w *Worker) printAvailableDBCons(n int) {
 func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 	for i := 0; i < maxLockJobAttempts; i++ {
 
-		tx, err := w.c.pool.Begin(ctx)
+		tx, err := w.c.pool.BeginTx(ctx, pgx.TxOptions{
+			IsoLevel: pgx.RepeatableRead,
+		})
 		if err != nil {
 			wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
 			return
 		}
+
 		transaction := Tx{
 			tx: tx,
 		}
@@ -189,21 +192,21 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			job.WorkerID = w.ID
 			job.Client = w.c
 			log.Printf("attempt %v from woker %v| sucessfully locked job : %v", i+1, n, j.ID)
-
-			wf, ok := w.m[job.Type]
-			if !ok {
-				msg := fmt.Sprintf("unknown job type: %q", j.Type)
-				log.Println(msg)
-				if err = j.Error(ctx, msg); err != nil {
-					log.Printf("attempting to save error on job %d: %v", j.ID, err)
-				}
-				return
-			}
-
-			if err = wf(job); err != nil {
-				job.Error(ctx, err.Error())
-				return
-			}
+			time.Sleep(time.Second * 1)
+			//wf, ok := w.m[job.Type]
+			//if !ok {
+			//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
+			//	log.Println(msg)
+			//	if err = j.Error(ctx, msg); err != nil {
+			//	  	log.Printf("attempting to save error on job %d: %v", j.ID, err)
+			//	}
+			//	return
+			//}
+			//
+			//if err = wf(job); err != nil {
+			//	job.Error(ctx, err.Error())
+			//	return
+			//}
 
 			err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 			if err != nil {
