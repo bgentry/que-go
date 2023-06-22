@@ -91,15 +91,17 @@ func (w *Worker) Work(ctx context.Context) {
 }
 
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
-	j, err := w.c.LockJob(ctx, w.Queue)
+	j, err := w.c.GlobalLockJob(ctx, w.Queue)
+	if j.tx != nil {
+		defer j.tx.Rollback(ctx)
+	}
 	if err != nil {
 		log.Printf("attempting to lock job: %v", err)
 		return
 	}
-	if j == nil {
+	if j == nil || (j != nil && j.ID == 0) {
 		return // no job was available
 	}
-	defer j.Done(ctx)
 	defer recoverPanic(ctx, j)
 	didWork = true
 	j.WorkerID = w.ID
@@ -122,8 +124,9 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	if err = j.Delete(ctx); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	//
-	wlog.InfoC(ctx, fmt.Sprintf("event=job_worked job_id=%d job_type=%s", j.ID, j.Type))
+	j.tx.Commit(ctx)
+
+	wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
 
 	return
 }

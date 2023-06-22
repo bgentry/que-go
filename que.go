@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	pgxnew "github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/weave-lab/pgx"
 	"github.com/weave-lab/pgx/pgtype"
 	"sync"
 	"time"
@@ -59,6 +59,7 @@ type Job struct {
 	deleted bool
 	pool    *pgxpool.Pool
 	conn    *pgxpool.Conn
+	tx      pgx.Tx
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -85,7 +86,7 @@ func (j *Job) Delete(ctx context.Context) error {
 		return nil
 	}
 
-	_, err := j.conn.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	_, err := j.tx.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
@@ -404,4 +405,34 @@ func PrepareStatements(ctx context.Context, conn *pgxnew.Conn) error {
 		}
 	}
 	return nil
+}
+func (c *Client) GlobalLockJob(ctx context.Context, queue string) (*Job, error) {
+
+	tx, err := c.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	j := Job{pool: c.pool, tx: tx}
+
+	for i := 0; i < maxLockJobAttempts; i++ {
+		err = tx.QueryRow(ctx, sqlGlobalLockJob, queue).Scan(
+			&j.Queue,
+			&j.Priority,
+			&j.RunAt,
+			&j.ID,
+			&j.Type,
+			&j.Args,
+			&j.ErrorCount,
+			&j.ShardID,
+			&j.LastError,
+		)
+
+		if err != nil {
+			tx.Rollback(ctx)
+			return nil, err
+		}
+
+	}
+	return &j, nil
 }
