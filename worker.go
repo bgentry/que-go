@@ -134,7 +134,12 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	transaction := Tx{
 		tx: tx,
 	}
-	defer transaction.Rollback(ctx)
+	defer func() {
+		err := transaction.Rollback(ctx)
+		if err != nil {
+			log.Printf("error while rolling back %v", err)
+		}
+	}()
 
 	j := Job{}
 	for i := 0; i < maxLockJobAttempts; i++ {
@@ -192,7 +197,10 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	if err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	transaction.Commit(ctx)
+	err = transaction.Commit(ctx)
+	if err != nil {
+		log.Printf("error while Committing changes  %v", err)
+	}
 
 	wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
 
