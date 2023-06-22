@@ -140,6 +140,7 @@ func (w *Worker) printAvailableDBCons(n int) {
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 
 	for i := 0; i < maxLockJobAttempts; i++ {
+
 		tx, err := w.c.pool.Begin(ctx)
 		if err != nil {
 			wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
@@ -163,8 +164,8 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 		)
 
 		if err != nil {
-			err := transaction.Rollback(ctx)
-			if err != nil {
+			err2 := transaction.Rollback(ctx)
+			if err2 != nil {
 				log.Printf("error while rolling back %v", err)
 			}
 			if strings.Contains(err.Error(), "no rows in result set") {
@@ -178,8 +179,8 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 			job := &j
 
 			if job == nil || (job != nil && job.ID == 0) {
-				err := transaction.Rollback(ctx)
-				if err != nil {
+				err2 := transaction.Rollback(ctx)
+				if err2 != nil {
 					log.Printf("error while rolling back %v", err)
 				}
 				return // no job was available
@@ -194,8 +195,8 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 
 			err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 			if err != nil {
-				err := transaction.Rollback(ctx)
-				if err != nil {
+				err2 := transaction.Rollback(ctx)
+				if err2 != nil {
 					log.Printf("error while rolling back %v", err)
 				}
 
@@ -204,8 +205,8 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 			}
 			err = transaction.Commit(ctx)
 			if err != nil {
-				err := transaction.Rollback(ctx)
-				if err != nil {
+				err2 := transaction.Rollback(ctx)
+				if err2 != nil {
 					log.Printf("error while rolling back %v", err)
 				}
 				log.Printf("error while Committing changes  %v", err)
