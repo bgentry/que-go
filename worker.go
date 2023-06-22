@@ -77,6 +77,7 @@ func NewWorker(c *Client, m WorkMap) *Worker {
 // Work pulls jobs off the Worker's Queue at its Interval. This function only
 // returns after Shutdown() is called, so it should be run in its own goroutine.
 func (w *Worker) Work(ctx context.Context) {
+
 	for {
 		select {
 		case <-w.ch:
@@ -122,6 +123,18 @@ func (ct *Tx) Exec(ctx context.Context, sql string, args ...interface{}) error {
 
 	_, err := ct.tx.Exec(ctx, sql, args...)
 	return err
+}
+func (w *Worker) printAvailableDBCons(n int) {
+	for {
+		select {
+		case <-w.ch:
+			log.Println("worker done")
+			return
+		case <-time.After(time.Second * 5):
+			log.Printf("wroker %v acquired db connections %v, totol %v ,max %v", n, w.c.pool.Stat().AcquiredConns(), w.c.pool.Stat().TotalConns(),
+				w.c.pool.Stat().MaxConns())
+		}
+	}
 }
 
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
@@ -176,22 +189,22 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	job.WorkerID = w.ID
 	job.Client = w.c
 
-	//fmt.Println("job type is ", job.Type, job.ID)
-	//time.Sleep(time.Second * 5)
-	wf, ok := w.m[job.Type]
-	if !ok {
-		msg := fmt.Sprintf("unknown job type: %q", j.Type)
-		log.Println(msg)
-		if err = j.Error(ctx, msg); err != nil {
-			log.Printf("attempting to save error on job %d: %v", j.ID, err)
-		}
-		return
-	}
-
-	if err = wf(job); err != nil {
-		job.Error(ctx, err.Error())
-		return
-	}
+	fmt.Println("job type is ", job.Type, job.ID)
+	time.Sleep(time.Second * 1)
+	//wf, ok := w.m[job.Type]
+	//if !ok {
+	//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
+	//	log.Println(msg)
+	//	if err = j.Error(ctx, msg); err != nil {
+	//		log.Printf("attempting to save error on job %d: %v", j.ID, err)
+	//	}
+	//	return
+	//}
+	//
+	//if err = wf(job); err != nil {
+	//	job.Error(ctx, err.Error())
+	//	return
+	//}
 
 	err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
@@ -279,6 +292,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 		w.workers[i].Queue = w.Queue
 		w.workers[i].ID = int(i)
 		go w.workers[i].Work(ctx)
+		go w.workers[i].printAvailableDBCons(i)
 	}
 }
 
