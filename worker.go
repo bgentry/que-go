@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v4"
 	"log"
+	"math/rand"
 	"os"
 	"runtime"
 	"strconv"
@@ -138,11 +139,10 @@ func (w *Worker) printAvailableDBCons(n int) {
 }
 
 func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
+	delay := []int{100, 150, 200, 250, 300, 350, 400, 450, 500}
 	for i := 0; i < maxLockJobAttempts; i++ {
 
-		tx, err := w.c.pool.BeginTx(ctx, pgx.TxOptions{
-			IsoLevel: pgx.RepeatableRead,
-		})
+		tx, err := w.c.pool.Begin(ctx)
 		if err != nil {
 			wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
 			return
@@ -175,6 +175,11 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 				return
 			} else {
 				log.Printf("attempt %v | received error from wroker %v.... retrying : %v", i+1, n, err)
+				n := rand.Intn(len(delay) - 1)
+				if n >= 0 {
+					time.Sleep(time.Millisecond * time.Duration(n))
+				}
+
 				continue
 			}
 		} else {
@@ -192,13 +197,13 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			job.WorkerID = w.ID
 			job.Client = w.c
 			log.Printf("attempt %v from woker %v| sucessfully locked job : %v", i+1, n, j.ID)
-			time.Sleep(time.Second * 1)
+			time.Sleep(time.Second * 2)
 			//wf, ok := w.m[job.Type]
 			//if !ok {
 			//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
 			//	log.Println(msg)
 			//	if err = j.Error(ctx, msg); err != nil {
-			//	  	log.Printf("attempting to save error on job %d: %v", j.ID, err)
+			//		log.Printf("attempting to save error on job %d: %v", j.ID, err)
 			//	}
 			//	return
 			//}
