@@ -139,23 +139,17 @@ func (w *Worker) printAvailableDBCons(n int) {
 
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 
-	tx, err := w.c.pool.Begin(ctx)
-	if err != nil {
-		wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
-		return
-	}
-	transaction := Tx{
-		tx: tx,
-	}
-	defer func() {
-		err := transaction.Rollback(ctx)
-		if err != nil {
-			log.Printf("error while rolling back %v", err)
-		}
-	}()
-
-	j := Job{}
 	for i := 0; i < maxLockJobAttempts; i++ {
+		tx, err := w.c.pool.Begin(ctx)
+		if err != nil {
+			wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
+			return
+		}
+		transaction := Tx{
+			tx: tx,
+		}
+		j := Job{}
+
 		err = transaction.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
 			&j.Queue,
 			&j.Priority,
@@ -168,29 +162,71 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 			&j.LastError,
 		)
 
-		if err == nil {
-			break
-		} else if strings.Contains(err.Error(), "no rows in result set") {
-			log.Printf("attempting to lock the job : %v", err)
-			return
+		if err != nil {
+			err := transaction.Rollback(ctx)
+			if err != nil {
+				log.Printf("error while rolling back %v", err)
+			}
+			if strings.Contains(err.Error(), "no rows in result set") {
+				log.Printf("attempting to lock the job : %v", err)
+				return
+			} else {
+				log.Printf("received error.... retrying : %v", err)
+				continue
+			}
 		} else {
-			log.Printf("received error.... retrying : %v", err)
-			continue
+			job := &j
+
+			if job == nil || (job != nil && job.ID == 0) {
+				err := transaction.Rollback(ctx)
+				if err != nil {
+					log.Printf("error while rolling back %v", err)
+				}
+				return // no job was available
+			}
+			defer recoverPanic(ctx, job)
+			didWork = true
+			job.WorkerID = w.ID
+			job.Client = w.c
+
+			fmt.Println("job type is ", job.Type, job.ID)
+			time.Sleep(time.Second * 1)
+
+			err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+			if err != nil {
+				err := transaction.Rollback(ctx)
+				if err != nil {
+					log.Printf("error while rolling back %v", err)
+				}
+
+				log.Printf("attempting to delete job %d: %v", j.ID, err)
+				return
+			}
+			err = transaction.Commit(ctx)
+			if err != nil {
+				err := transaction.Rollback(ctx)
+				if err != nil {
+					log.Printf("error while rolling back %v", err)
+				}
+				log.Printf("error while Committing changes  %v", err)
+
+			}
+			break
 		}
 
 	}
-	job := &j
 
-	if job == nil || (job != nil && job.ID == 0) {
-		return // no job was available
-	}
-	defer recoverPanic(ctx, job)
-	didWork = true
-	job.WorkerID = w.ID
-	job.Client = w.c
-
-	fmt.Println("job type is ", job.Type, job.ID)
-	time.Sleep(time.Second * 1)
+	//job := &j
+	//
+	//if job == nil || (job != nil && job.ID == 0) {
+	//	return // no job was available
+	//}
+	//defer recoverPanic(ctx, job)
+	//didWork = true
+	//job.WorkerID = w.ID
+	//job.Client = w.c
+	//
+	//
 	//wf, ok := w.m[job.Type]
 	//if !ok {
 	//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
@@ -206,16 +242,16 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 	//	return
 	//}
 
-	err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
-	if err != nil {
-		log.Printf("attempting to delete job %d: %v", j.ID, err)
-	}
-	err = transaction.Commit(ctx)
-	if err != nil {
-		log.Printf("error while Committing changes  %v", err)
-	}
+	//err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	//if err != nil {
+	//	log.Printf("attempting to delete job %d: %v", j.ID, err)
+	//}
+	//err = transaction.Commit(ctx)
+	//if err != nil {
+	//	log.Printf("error while Committing changes  %v", err)
+	//}
 
-	wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
+	//wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
 
 	return
 }
