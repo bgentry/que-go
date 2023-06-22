@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"weavelab.xyz/monorail/shared/wlib/wlog"
@@ -91,23 +92,49 @@ func (w *Worker) Work(ctx context.Context) {
 }
 
 func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
-	j, err := w.c.GlobalLockJob(ctx, w.Queue)
-	if j != nil && j.tx != nil {
-		// roll back the transaction if we didn't get a job
-		defer j.tx.Rollback(ctx)
-	}
+
+	tx, err := w.c.pool.Begin(ctx)
 	if err != nil {
-		log.Printf("attempting to lock job: %v", err)
+		wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
 		return
 	}
-	if j == nil || (j != nil && j.ID == 0) {
+	defer tx.Rollback(ctx)
+
+	j := Job{pool: w.c.pool, tx: tx}
+	for i := 0; i < maxLockJobAttempts; i++ {
+		err = j.tx.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
+			&j.Queue,
+			&j.Priority,
+			&j.RunAt,
+			&j.ID,
+			&j.Type,
+			&j.Args,
+			&j.ErrorCount,
+			&j.ShardID,
+			&j.LastError,
+		)
+
+		if err == nil {
+			break
+		} else if strings.Contains(err.Error(), "no rows in result set") {
+			log.Printf("attempting to lock the job : %v", err)
+			return
+		} else {
+			log.Printf("received error.... retrying : %v", err)
+			continue
+		}
+
+	}
+	job := &j
+
+	if job == nil || (job != nil && job.ID == 0) {
 		return // no job was available
 	}
-	defer recoverPanic(ctx, j)
+	defer recoverPanic(ctx, job)
 	didWork = true
-	j.WorkerID = w.ID
-	j.Client = w.c
-	wf, ok := w.m[j.Type]
+	job.WorkerID = w.ID
+	job.Client = w.c
+	wf, ok := w.m[job.Type]
 	if !ok {
 		msg := fmt.Sprintf("unknown job type: %q", j.Type)
 		log.Println(msg)
@@ -117,15 +144,15 @@ func (w *Worker) WorkOne(ctx context.Context) (didWork bool) {
 		return
 	}
 
-	if err = wf(j); err != nil {
-		j.Error(ctx, err.Error())
+	if err = wf(job); err != nil {
+		job.Error(ctx, err.Error())
 		return
 	}
 
-	if err = j.Delete(ctx); err != nil {
+	if err = job.Delete(ctx); err != nil {
 		log.Printf("attempting to delete job %d: %v", j.ID, err)
 	}
-	j.tx.Commit(ctx)
+	job.tx.Commit(ctx)
 
 	wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
 
