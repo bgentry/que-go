@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/weave-lab/pgx/pgtype"
 	"log"
-	"strings"
 	"sync"
 	"time"
 	"weavelab.xyz/monorail/shared/go-utilities/null"
@@ -418,7 +417,7 @@ func (c *Client) GlobalLockJob(ctx context.Context, queue string) (*Job, error) 
 	j := Job{pool: c.pool, tx: tx}
 
 	for i := 0; i < maxLockJobAttempts; i++ {
-		err = tx.QueryRow(ctx, sqlGlobalLockJob, queue).Scan(
+		err = j.tx.QueryRow(ctx, sqlGlobalLockJob, queue).Scan(
 			&j.Queue,
 			&j.Priority,
 			&j.RunAt,
@@ -430,14 +429,14 @@ func (c *Client) GlobalLockJob(ctx context.Context, queue string) (*Job, error) 
 			&j.LastError,
 		)
 
-		if err != nil {
-			if strings.Contains(err.Error(), "no rows in result set") {
-				return nil, err
-			}
+		if err == nil {
+			return &j, nil
+		} else if err == pgx.ErrNoRows {
+			return nil, err
+		} else {
 			log.Printf("received error.... retrying : %v", err)
 			continue
 		}
-		return &j, nil
 
 	}
 	return &j, ErrAgain
