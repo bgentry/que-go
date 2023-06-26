@@ -138,20 +138,18 @@ func (w *Worker) printAvailableDBCons(n int) {
 }
 
 func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
+	tx, err := w.c.pool.Begin(ctx)
+	if err != nil {
+		wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
+		return
+	}
+	transaction := Tx{
+		tx: tx,
+	}
+	//defer  transaction.Commit(ctx)
+	j := Job{}
 	for i := 0; i < maxLockJobAttempts; i++ {
-
-		tx, err := w.c.pool.Begin(ctx)
-		if err != nil {
-			wlog.InfoC(ctx, fmt.Sprintf("unable to begin transaction: %v", err))
-			return
-		}
-
-		transaction := Tx{
-			tx: tx,
-		}
-		j := Job{}
-
-		err = transaction.QueryRow(ctx, sqlGlobalLockJob2, w.Queue).Scan(
+		err = transaction.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
 			&j.Queue,
 			&j.Priority,
 			&j.RunAt,
@@ -164,72 +162,73 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 		)
 
 		if err != nil {
-			err2 := transaction.Rollback(ctx)
-			if err2 != nil {
-				log.Printf("error while rolling back %v", err)
-			}
 			if strings.Contains(err.Error(), "no rows in result set") {
+				err2 := transaction.Rollback(ctx)
+				if err2 != nil {
+					log.Printf("error while rolling back %v", err)
+				}
 				log.Printf("attempting to lock the job from wroker %v : %v", n, err)
 				return
 			} else {
-
 				continue
 			}
 		} else {
-			job := &j
-
-			if job == nil || (job != nil && job.ID == 0) {
-				err2 := transaction.Rollback(ctx)
-				if err2 != nil {
-					log.Printf("error while rolling back %v", err)
-				}
-				return // no job was available
-			}
-			defer recoverPanic(ctx, job)
-			didWork = true
-			job.WorkerID = w.ID
-			job.Client = w.c
 			log.Printf("attempt %v from woker %v| sucessfully locked job : %v", i+1, n, j.ID)
-			time.Sleep(time.Second * 3)
-			//wf, ok := w.m[job.Type]
-			//if !ok {
-			//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
-			//	log.Println(msg)
-			//	if err = j.Error(ctx, msg); err != nil {
-			//		log.Printf("attempting to save error on job %d: %v", j.ID, err)
-			//	}
-			//	return
-			//}
-			//
-			//if err = wf(job); err != nil {
-			//	job.Error(ctx, err.Error())
-			//	return
-			//}
-
-			err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
-			if err != nil {
-				err2 := transaction.Rollback(ctx)
-				if err2 != nil {
-					log.Printf("error while rolling back %v", err)
-				}
-
-				log.Printf("attempting to delete job %d: %v", j.ID, err)
-				return
-			}
-			err = transaction.Commit(ctx)
-			if err != nil {
-				err2 := transaction.Rollback(ctx)
-				if err2 != nil {
-					log.Printf("error while rolling back %v", err)
-				}
-				log.Printf("error while Committing changes  %v", err)
-
-			}
-			wlog.InfoC(ctx, fmt.Sprintf("wroker %v event is done =job_worked job_id=%d job_type=%s", n, j.ID, j.Type))
 			break
 		}
 
 	}
+
+	job := &j
+
+	if job == nil || (job != nil && job.ID == 0) {
+		err2 := transaction.Rollback(ctx)
+		if err2 != nil {
+			log.Printf("error while rolling back %v", err)
+		}
+		return // no job was available
+	}
+	defer recoverPanic(ctx, job)
+	didWork = true
+	job.WorkerID = w.ID
+	job.Client = w.c
+
+	time.Sleep(time.Second * 3)
+	//wf, ok := w.m[job.Type]
+	//if !ok {
+	//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
+	//	log.Println(msg)
+	//	if err = j.Error(ctx, msg); err != nil {
+	//		log.Printf("attempting to save error on job %d: %v", j.ID, err)
+	//	}
+	//	return
+	//}
+	//
+	//if err = wf(job); err != nil {
+	//	job.Error(ctx, err.Error())
+	//	return
+	//}
+
+	err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	if err != nil {
+		err2 := transaction.Rollback(ctx)
+		if err2 != nil {
+			log.Printf("error while rolling back %v", err)
+		}
+
+		log.Printf("attempting to delete job %d: %v", j.ID, err)
+		return
+	}
+	err = transaction.Commit(ctx)
+	if err != nil {
+		err2 := transaction.Rollback(ctx)
+		if err2 != nil {
+			log.Printf("error while rolling back %v", err)
+		}
+		log.Printf("error while Committing changes  %v", err)
+
+	}
+	wlog.InfoC(ctx, fmt.Sprintf("wroker %v event is done =job_worked job_id=%d job_type=%s", n, j.ID, j.Type))
 
 	//job := &j
 	//
