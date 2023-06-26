@@ -146,6 +146,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 	transaction := Tx{
 		tx: tx,
 	}
+	log.Printf("pg connecion id %v", tx.Conn().PgConn().PID())
 	//defer  transaction.Commit(ctx)
 	j := Job{}
 	for i := 0; i < maxLockJobAttempts; i++ {
