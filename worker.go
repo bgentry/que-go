@@ -149,7 +149,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			tx: tx,
 		}
 		j := Job{}
-		log.Printf("pg connecion id %v", tx.Conn().PgConn().PID())
+		log.Printf("pg connecion id %v worker %v", tx.Conn().PgConn().PID(), n)
 		err = transaction.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
 			&j.Queue,
 			&j.Priority,
