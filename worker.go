@@ -170,6 +170,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 				log.Printf("attempting to lock the job from wroker %v : %v", n, err)
 				return
 			} else {
+				log.Printf("attempt %v  to lock the job from wroker %v : %v", i+1, n, err)
 				continue
 			}
 		} else {
