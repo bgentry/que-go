@@ -146,12 +146,10 @@ for update skip locked limit 1 `
 
 const (
 	sqlGlobalLockJob2 = `	
-	with cte as (
-SELECT  job_id
+	select queue, priority, run_at, job_id, job_class, args, error_count, shard_id, last_error
+FROM que_jobs where job_id = (SELECT  job_id
 FROM que_jobs
 WHERE queue = $1::text and run_at <= now()  and job_id IS NOT NULL ORDER BY priority, run_at, job_id
-for update skip locked limit 1 )
-	select queue, priority, run_at, job_id, job_class, args, error_count, shard_id, last_error
-FROM que_jobs where job_id = (select job_id from cte)
+for update skip locked limit 1) 
 	`
 )
