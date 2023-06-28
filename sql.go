@@ -92,7 +92,7 @@ VALUES
 `
 
 	sqlDeleteJob = `
-DELETE FROM que_jobs
+DELETE FROM que_jobs_new
 WHERE queue    = $1::text
 AND   priority = $2::smallint
 AND   run_at   = $3::timestamptz
