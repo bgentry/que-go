@@ -163,11 +163,11 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 		)
 
 		if err != nil {
+			err2 := transaction.Rollback(ctx)
+			if err2 != nil {
+				log.Printf("error while rolling back %v", err)
+			}
 			if strings.Contains(err.Error(), "no rows in result set") {
-				err2 := transaction.Rollback(ctx)
-				if err2 != nil {
-					log.Printf("error while rolling back %v", err)
-				}
 				log.Printf("attempting to lock the job from wroker %v : %v", n, err)
 				return
 			} else {
