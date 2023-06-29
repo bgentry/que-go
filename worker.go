@@ -149,7 +149,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			tx: tx,
 		}
 		j := Job{}
-		log.Printf("pg connecion id %v worker %v", tx.Conn().PgConn().PID(), n)
+
 		err = transaction.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
 			&j.Queue,
 			&j.Priority,
@@ -190,21 +190,20 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			job.WorkerID = w.ID
 			job.Client = w.c
 
-			time.Sleep(time.Second * 3)
-			//wf, ok := w.m[job.Type]
-			//if !ok {
-			//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
-			//	log.Println(msg)
-			//	if err = j.Error(ctx, msg); err != nil {
-			//		log.Printf("attempting to save error on job %d: %v", j.ID, err)
-			//	}
-			//	return
-			//}
-			//
-			//if err = wf(job); err != nil {
-			//	job.Error(ctx, err.Error())
-			//	return
-			//}
+			wf, ok := w.m[job.Type]
+			if !ok {
+				msg := fmt.Sprintf("unknown job type: %q", j.Type)
+				log.Println(msg)
+				if err = j.Error(ctx, msg); err != nil {
+					log.Printf("attempting to save error on job %d: %v", j.ID, err)
+				}
+				return
+			}
+
+			if err = wf(job); err != nil {
+				job.Error(ctx, err.Error())
+				return
+			}
 
 			err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 			if err != nil {
