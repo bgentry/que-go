@@ -231,43 +231,6 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 
 	}
 
-	//job := &j
-	//
-	//if job == nil || (job != nil && job.ID == 0) {
-	//	return // no job was available
-	//}
-	//defer recoverPanic(ctx, job)
-	//didWork = true
-	//job.WorkerID = w.ID
-	//job.Client = w.c
-	//
-	//
-	//wf, ok := w.m[job.Type]
-	//if !ok {
-	//	msg := fmt.Sprintf("unknown job type: %q", j.Type)
-	//	log.Println(msg)
-	//	if err = j.Error(ctx, msg); err != nil {
-	//		log.Printf("attempting to save error on job %d: %v", j.ID, err)
-	//	}
-	//	return
-	//}
-	//
-	//if err = wf(job); err != nil {
-	//	job.Error(ctx, err.Error())
-	//	return
-	//}
-
-	//err = transaction.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
-	//if err != nil {
-	//	log.Printf("attempting to delete job %d: %v", j.ID, err)
-	//}
-	//err = transaction.Commit(ctx)
-	//if err != nil {
-	//	log.Printf("error while Committing changes  %v", err)
-	//}
-
-	//wlog.InfoC(ctx, fmt.Sprintf("event is done =job_worked job_id=%d job_type=%s", j.ID, j.Type))
-
 	return
 }
 

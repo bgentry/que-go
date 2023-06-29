@@ -406,38 +406,3 @@ func PrepareStatements(ctx context.Context, conn *pgxnew.Conn) error {
 	}
 	return nil
 }
-
-//func (c *Client) GlobalLockJob(ctx context.Context, queue string) (*Job, error) {
-//
-//	tx, err := c.pool.Begin(ctx)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	j := Job{pool: c.pool}
-//
-//	for i := 0; i < maxLockJobAttempts; i++ {
-//		err = j.tx.QueryRow(ctx, sqlGlobalLockJob, queue).Scan(
-//			&j.Queue,
-//			&j.Priority,
-//			&j.RunAt,
-//			&j.ID,
-//			&j.Type,
-//			&j.Args,
-//			&j.ErrorCount,
-//			&j.ShardID,
-//			&j.LastError,
-//		)
-//
-//		if err == nil {
-//			return &j, nil
-//		} else if err == pgx.ErrNoRows {
-//			return nil, err
-//		} else {
-//			log.Printf("received error.... retrying : %v", err)
-//			continue
-//		}
-//
-//	}
-//	return &j, ErrAgain
-//}
