@@ -135,11 +135,3 @@ JOIN (
 ) pg USING (job_id)
 `
 )
-
-const (
-	sqlGlobalLockJob = `
-SELECT queue, priority, run_at, job_id, job_class, args, error_count, shard_id, last_error
-FROM que_jobs
-WHERE queue = $1::text and run_at <= now()  and job_id IS NOT NULL ORDER BY priority, run_at, job_id limit 1
-for update skip locked `
-)

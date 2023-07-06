@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
 	pgxnew "github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/weave-lab/pgx"
 	"github.com/weave-lab/pgx/pgtype"
 	"sync"
 	"time"
@@ -59,7 +59,6 @@ type Job struct {
 	deleted bool
 	pool    *pgxpool.Pool
 	conn    *pgxpool.Conn
-	tx      Tx
 }
 
 // Conn returns the pgx connection that this job is locked to. You may initiate
@@ -86,7 +85,7 @@ func (j *Job) Delete(ctx context.Context) error {
 		return nil
 	}
 
-	err := j.tx.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
+	_, err := j.conn.Exec(ctx, sqlDeleteJob, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}
