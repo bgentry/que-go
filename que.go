@@ -126,7 +126,7 @@ func (j *Job) Error(ctx context.Context, msg string) error {
 	errorCount := j.ErrorCount + 1
 	delay := intPow(int(errorCount), 4) + 3 // TODO: configurable delay
 
-	_, err := j.conn.Exec(ctx, sqlSetError, errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
+	err := j.tx.Exec(ctx, sqlSetError, errorCount, delay, msg, j.Queue, j.Priority, j.RunAt, j.ID)
 	if err != nil {
 		return err
 	}

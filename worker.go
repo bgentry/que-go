@@ -148,7 +148,9 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 		transaction := Tx{
 			tx: tx,
 		}
-		j := Job{}
+		j := Job{
+			tx: transaction,
+		}
 
 		err = transaction.QueryRow(ctx, sqlGlobalLockJob, w.Queue).Scan(
 			&j.Queue,
@@ -194,7 +196,7 @@ func (w *Worker) WorkOne(ctx context.Context, n int) (didWork bool) {
 			if !ok {
 				msg := fmt.Sprintf("unknown job type: %q", j.Type)
 				log.Println(msg)
-				if err = j.Error(ctx, msg); err != nil {
+				if err = job.Error(ctx, msg); err != nil {
 					log.Printf("attempting to save error on job %d: %v", j.ID, err)
 				}
 				return
