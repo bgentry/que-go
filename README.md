@@ -2,6 +2,12 @@
 
 [![GoDoc](https://godoc.org/github.com/bgentry/que-go?status.svg)][godoc]
 
+## Unmaintained
+
+⚠️ **que-go is unmaintained** ⚠️. Please check out [River](https://riverqueue.com) for a fast, reliable Postgres job queue in Go.
+
+## Overview
+
 Que-go is a fully interoperable Golang port of [Chris Hanks][chanks]' [Ruby Que
 queuing library][ruby-que] for PostgreSQL. Que uses PostgreSQL's advisory locks
 for speed and reliability.
