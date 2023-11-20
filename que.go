@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/pgtype"
-	pgxV4 "github.com/jackc/pgx/v4"
+	pgxV5 "github.com/jackc/pgx/v5"
 )
 
 // Job is a single unit of work for Que to perform.
@@ -158,7 +158,7 @@ func NewClient(pool *pgx.ConnPool) *Client {
 var ErrMissingType = errors.New("job type must be specified")
 
 // Enqueue method appends a job to the queue adhering to the transactional flow of the Talon service.
-func (c *Client) Enqueue(j *Job, txn pgxV4.Tx) error {
+func (c *Client) Enqueue(j *Job, txn pgxV5.Tx) error {
 	return execEnqueue(j, txn)
 }
 
@@ -168,11 +168,11 @@ func (c *Client) Enqueue(j *Job, txn pgxV4.Tx) error {
 //
 // It is the caller's responsibility to Commit or Rollback the transaction after
 // this function is called.
-func (c *Client) EnqueueInTx(j *Job, txn pgxV4.Tx) error {
+func (c *Client) EnqueueInTx(j *Job, txn pgxV5.Tx) error {
 	return execEnqueue(j, txn)
 }
 
-func execEnqueue(j *Job, txn pgxV4.Tx) error {
+func execEnqueue(j *Job, txn pgxV5.Tx) error {
 	if j.Type == "" {
 		return ErrMissingType
 	}
